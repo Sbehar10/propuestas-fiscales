@@ -334,6 +334,28 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     }
 
 
+def neto_a_bruto(neto_deseado, clase_riesgo="I"):
+    """
+    Calcula el sueldo bruto necesario para lograr un neto deseado.
+    neto = bruto - ISR(bruto) - IMSS_obrero(bruto)
+    Usa bisección, tolerancia $0.50
+    """
+    low = neto_deseado
+    high = neto_deseado * 2.5
+    for _ in range(100):
+        mid = (low + high) / 2
+        isr = calcular_isr(mid)
+        imss_obr = calcular_imss_obrero(mid)
+        neto = mid - isr["isr_neto"] - imss_obr["total"]
+        if abs(neto - neto_deseado) < 0.50:
+            return round(mid, 2)
+        elif neto < neto_deseado:
+            low = mid
+        else:
+            high = mid
+    return round(mid, 2)
+
+
 def _piramidar_sc(neto_deseado, pct_anticipo, comision_pct):
     """Calcula ingreso bruto necesario para lograr neto deseado en SC (bisección)"""
     low, high = neto_deseado, neto_deseado * 3

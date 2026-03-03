@@ -1,10 +1,14 @@
 import streamlit as st
 import pandas as pd
+import io
 from datetime import datetime
-from constantes import LISTA_PUESTOS, PUESTOS_PROFESIONALES, PRIMA_RIESGO
+from constantes import LISTA_PUESTOS, PUESTOS_PROFESIONALES, PRIMA_RIESGO, SALARIO_MINIMO_MENSUAL
 from motor_calculo import (
     calcular_esquema_actual, calcular_esquema_irt, calcular_excedentes,
-    calcular_sociedad_civil, calcular_grupo_nomina
+    calcular_sociedad_civil, calcular_grupo_nomina, neto_a_bruto
+)
+from procesador_nomina import (
+    detectar_columnas, detectar_bruto_neto, mapear_puestos, validar_datos
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
@@ -104,23 +108,333 @@ with st.sidebar:
     st.markdown("## 📋 Tipo de Servicio")
     tipo_servicio = st.radio(
         "Selecciona el servicio:",
-        options=["Nómina completa (IRT)", "Solo excedentes", "Sociedad Civil"],
+        options=["📂 Cotizador (Subir nómina)", "Nómina completa (IRT)", "Solo excedentes", "Sociedad Civil"],
         index=0
     )
 
     tipo_map = {
+        "📂 Cotizador (Subir nómina)": "cotizador",
         "Nómina completa (IRT)": "nomina",
         "Solo excedentes": "excedentes",
         "Sociedad Civil": "sc",
     }
     tipo = tipo_map[tipo_servicio]
 
+
+# ============================================================
+# FUNCIÓN REUTILIZABLE: MOSTRAR RESULTADOS DE NÓMINA IRT
+# ============================================================
+def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto):
+    """Muestra métricas, proyección, gráfica, detalle y descarga Word para resultados IRT."""
+    import altair as alt
+
+    costo_actual_total = 0
+    ahorro_total = 0
+    total_empleados = 0
+    total_administrado = 0
+
+    for r in resultados_grupos:
+        costo_actual_total += r["actual"]["costo_total"]
+        ahorro_total += r["ahorro_mensual"]
+        total_empleados += r["num_empleados"]
+        total_administrado += r["sueldo_bruto"] * r["num_empleados"]
+
+    # Métricas principales
+    st.markdown("### 📊 Resultados")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>Costo Actual Mensual</h3>
+            <p>{fmt_moneda(costo_actual_total)}</p>
+        </div>""", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>Empleados</h3>
+            <p>{total_empleados}</p>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div class="ahorro-verde">
+            <h3>Ahorro Mensual IRT</h3>
+            <p>{fmt_moneda(ahorro_total)}</p>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("")
+    pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
+
+    # Tabla resumen — Proyección de Ahorro
+    st.markdown("#### Proyección de Ahorro")
+    df_ahorro = pd.DataFrame({
+        "Período": ["Mensual", "Anual", "2 Años", "3 Años"],
+        "Ahorro IRT": [fmt_moneda(ahorro_total), fmt_moneda(ahorro_total * 12),
+                        fmt_moneda(ahorro_total * 24), fmt_moneda(ahorro_total * 36)],
+        "% Ahorro": [f"{pct_ahorro:.1f}%"] * 4,
+    })
+    st.dataframe(df_ahorro, use_container_width=True, hide_index=True)
+
+    # Gráfica comparativa
+    st.markdown("#### Comparativo de Costos")
+    chart_data = pd.DataFrame({
+        "Esquema": ["Actual (100%)", "IRT Propuesto"],
+        "Costo Mensual": [costo_actual_total, costo_actual_total - ahorro_total]
+    })
+    chart = alt.Chart(chart_data).mark_bar().encode(
+        x=alt.X("Esquema", sort=None),
+        y="Costo Mensual",
+        color=alt.Color("Esquema", scale=alt.Scale(
+            domain=["Actual (100%)", "IRT Propuesto"],
+            range=["#1B3A5C", "#27AE60"]
+        ))
+    ).properties(height=350)
+    st.altair_chart(chart, use_container_width=True)
+
+    # Detalle por grupo
+    st.markdown("#### Detalle por Grupo")
+    for r in resultados_grupos:
+        with st.expander(f"📋 {r['puesto']} — {r['num_empleados']} empleados a {fmt_moneda(r['sueldo_bruto'])}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Costo actual/mes", fmt_moneda(r["actual"]["costo_total"]))
+            with col2:
+                st.metric("Ahorro IRT/mes", fmt_moneda(r["ahorro_mensual"]))
+
+            st.write(f"**Base nómina IRT:** {fmt_moneda(r['irt']['base_nomina'])} | "
+                     f"**Excedente IRT:** {fmt_moneda(r['irt']['excedente_irt'])}")
+            st.write(f"**Neto trabajador actual:** {fmt_moneda(r['actual']['neto_trabajador'])} → "
+                     f"**IRT:** {fmt_moneda(r['irt']['neto_trabajador'])}")
+
+    # === GENERAR WORD ===
+    st.markdown("---")
+    st.markdown("### 📄 Descargar Propuesta en Word")
+
+    datos_cliente = {
+        "nombre_empresa": nombre_empresa or "Cliente",
+        "contacto": contacto or "Sin especificar",
+        "comision_pct": comision_pct,
+    }
+    resultados_word = {
+        "total_empleados": total_empleados,
+        "costo_actual_total": costo_actual_total,
+        "ahorro_total_mensual": ahorro_total,
+        "total_administrado": total_administrado,
+    }
+
+    buffer = generar_propuesta_word(
+        datos_cliente=datos_cliente,
+        tipo_servicio="nomina",
+        resultados=resultados_word,
+        grupos=resultados_grupos,
+    )
+
+    nombre_archivo = f"Propuesta_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
+    st.download_button(
+        label="⬇️ DESCARGAR PROPUESTA EN WORD",
+        data=buffer,
+        file_name=nombre_archivo,
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        type="primary",
+        use_container_width=True,
+    )
+
+
 # === CONTENIDO PRINCIPAL ===
 
 # ============================================================
-# NÓMINA COMPLETA (IRT)
+# COTIZADOR (SUBIR NÓMINA)
 # ============================================================
-if tipo == "nomina":
+if tipo == "cotizador":
+    st.markdown("### 📂 Cotizador — Subir Nómina")
+    st.markdown("Sube un archivo Excel o CSV con la nómina del cliente para generar la propuesta automáticamente.")
+
+    # --- File upload ---
+    archivo = st.file_uploader(
+        "Sube el archivo de nómina",
+        type=["xlsx", "xls", "csv"],
+        key="archivo_nomina"
+    )
+
+    if archivo is not None:
+        # Leer archivo
+        try:
+            if archivo.name.endswith(".csv"):
+                # Try utf-8 first, fallback to latin-1 for Mexican files
+                try:
+                    df_raw = pd.read_csv(archivo, encoding="utf-8")
+                except UnicodeDecodeError:
+                    archivo.seek(0)
+                    df_raw = pd.read_csv(archivo, encoding="latin-1")
+            else:
+                df_raw = pd.read_excel(archivo)
+        except Exception as e:
+            st.error(f"Error al leer el archivo: {e}")
+            st.stop()
+
+        st.markdown("#### Vista previa del archivo")
+        st.dataframe(df_raw.head(10), use_container_width=True, hide_index=True)
+        st.caption(f"{len(df_raw)} filas x {len(df_raw.columns)} columnas")
+
+        # --- Column mapping ---
+        st.markdown("#### Mapeo de columnas")
+        cols_detectadas = detectar_columnas(df_raw)
+        columnas_df = list(df_raw.columns)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            idx_puesto = columnas_df.index(cols_detectadas["puesto"]) if cols_detectadas["puesto"] in columnas_df else 0
+            col_puesto = st.selectbox("Columna de Puesto", options=columnas_df, index=idx_puesto, key="col_puesto")
+        with col2:
+            idx_sueldo = columnas_df.index(cols_detectadas["sueldo"]) if cols_detectadas["sueldo"] in columnas_df else 0
+            col_sueldo = st.selectbox("Columna de Sueldo", options=columnas_df, index=idx_sueldo, key="col_sueldo")
+        with col3:
+            opciones_emp = ["(ninguna — cada fila = 1 empleado)"] + columnas_df
+            if cols_detectadas["num_empleados"] and cols_detectadas["num_empleados"] in columnas_df:
+                idx_emp = columnas_df.index(cols_detectadas["num_empleados"]) + 1  # +1 for the "(ninguna)" option
+            else:
+                idx_emp = 0
+            col_empleados = st.selectbox("Columna de # Empleados", options=opciones_emp, index=idx_emp, key="col_emp")
+
+        cada_fila_un_empleado = col_empleados == "(ninguna — cada fila = 1 empleado)"
+
+        # --- Bruto / Neto ---
+        st.markdown("#### Tipo de sueldo")
+        tipo_sueldo_detectado = detectar_bruto_neto(df_raw, col_sueldo)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            opciones_bn = ["Bruto", "Neto"]
+            idx_bn = 1 if tipo_sueldo_detectado == "neto" else 0
+            tipo_sueldo = st.radio(
+                "El sueldo del archivo es:",
+                options=opciones_bn,
+                index=idx_bn,
+                horizontal=True,
+                key="tipo_sueldo"
+            )
+            if tipo_sueldo_detectado != "desconocido":
+                st.caption(f"Auto-detectado: **{tipo_sueldo_detectado}**")
+        with col2:
+            clase_riesgo_cot = st.selectbox(
+                "Clase de riesgo IMSS",
+                options=["I", "II", "III", "IV", "V"],
+                key="riesgo_cotizador"
+            )
+
+        # --- Puesto mapping ---
+        st.markdown("#### Mapeo de puestos al catálogo")
+
+        # Limpiar datos para mapeo
+        df_trabajo = df_raw[[col_puesto, col_sueldo] + ([col_empleados] if not cada_fila_un_empleado else [])].copy()
+        df_trabajo[col_sueldo] = pd.to_numeric(df_trabajo[col_sueldo], errors="coerce")
+        df_trabajo = df_trabajo.dropna(subset=[col_sueldo])
+
+        if not cada_fila_un_empleado:
+            df_trabajo[col_empleados] = pd.to_numeric(df_trabajo[col_empleados], errors="coerce").fillna(1).astype(int)
+
+        df_mapeo = mapear_puestos(df_trabajo[col_puesto])
+
+        # Preparar opciones del catálogo para el editor
+        opciones_catalogo = sorted([p for p in PUESTOS_PROFESIONALES.keys()])
+
+        # Data editor para corregir mapeo
+        df_editor = df_mapeo[["puesto_original", "puesto_catalogo", "minimo_profesional", "confianza"]].copy()
+        df_editor.columns = ["Puesto Original", "Puesto Catálogo", "Mín. Profesional", "Confianza"]
+
+        # Highlight baja confianza
+        baja_confianza = (df_editor["Confianza"] < 0.7).sum()
+        if baja_confianza > 0:
+            st.warning(f"Se encontraron **{baja_confianza}** puestos con baja confianza de mapeo. Revisa y corrige si es necesario.")
+
+        df_editado = st.data_editor(
+            df_editor,
+            column_config={
+                "Puesto Original": st.column_config.TextColumn("Puesto Original", disabled=True),
+                "Puesto Catálogo": st.column_config.SelectboxColumn(
+                    "Puesto Catálogo",
+                    options=opciones_catalogo,
+                    required=True,
+                ),
+                "Mín. Profesional": st.column_config.NumberColumn("Mín. Profesional", format="$%d"),
+                "Confianza": st.column_config.ProgressColumn("Confianza", min_value=0, max_value=1, format="%.0f%%"),
+            },
+            use_container_width=True,
+            hide_index=True,
+            key="editor_puestos",
+        )
+
+        # Actualizar mínimos profesionales según selección del editor
+        mapeo_final = {}
+        for _, row in df_editado.iterrows():
+            puesto_cat = row["Puesto Catálogo"]
+            min_prof = PUESTOS_PROFESIONALES.get(puesto_cat, SALARIO_MINIMO_MENSUAL)
+            mapeo_final[row["Puesto Original"]] = {
+                "puesto_catalogo": puesto_cat,
+                "minimo_profesional": min_prof,
+            }
+
+        # --- Validación ---
+        cols_val = {"puesto": col_puesto, "sueldo": col_sueldo,
+                    "num_empleados": col_empleados if not cada_fila_un_empleado else None}
+        warnings = validar_datos(df_raw, cols_val)
+        if warnings:
+            for w in warnings:
+                st.warning(w)
+
+        # --- Calcular ---
+        st.markdown("---")
+        if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True, key="calc_cotizador"):
+            with st.spinner("Calculando..."):
+                # Preparar datos: agrupar si cada fila = 1 empleado
+                if cada_fila_un_empleado:
+                    df_agrupado = df_trabajo.groupby([col_puesto, col_sueldo]).size().reset_index(name="num_empleados")
+                else:
+                    df_agrupado = df_trabajo.rename(columns={col_empleados: "num_empleados"})
+
+                # Convertir neto a bruto si aplica
+                es_neto = tipo_sueldo == "Neto"
+
+                resultados_grupos = []
+                for _, fila in df_agrupado.iterrows():
+                    puesto_orig = fila[col_puesto]
+                    sueldo = fila[col_sueldo]
+                    n_emp = int(fila["num_empleados"])
+
+                    if n_emp <= 0:
+                        continue
+
+                    # Convertir neto a bruto
+                    if es_neto:
+                        sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_cot)
+                    else:
+                        sueldo_bruto = sueldo
+
+                    # Obtener mapeo de puesto
+                    info_puesto = mapeo_final.get(puesto_orig, {
+                        "puesto_catalogo": "Otro (personalizado)",
+                        "minimo_profesional": SALARIO_MINIMO_MENSUAL,
+                    })
+
+                    r = calcular_grupo_nomina(
+                        puesto=info_puesto["puesto_catalogo"],
+                        num_empleados=n_emp,
+                        sueldo_bruto=sueldo_bruto,
+                        clase_riesgo=clase_riesgo_cot,
+                        minimo_profesional=info_puesto["minimo_profesional"],
+                        comision_pct=comision_pct,
+                    )
+                    resultados_grupos.append(r)
+
+                if resultados_grupos:
+                    mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
+                else:
+                    st.warning("No se encontraron datos válidos para calcular.")
+
+
+# ============================================================
+# NÓMINA COMPLETA (IRT) — Manual
+# ============================================================
+elif tipo == "nomina":
     st.markdown("### 👥 Grupos de Empleados")
     st.markdown("Agrega los grupos de empleados con sus puestos y sueldos actuales.")
 
@@ -187,11 +501,6 @@ if tipo == "nomina":
         if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True):
             with st.spinner("Calculando..."):
                 resultados_grupos = []
-                costo_actual_total = 0
-                ahorro_total = 0
-                total_empleados = 0
-                total_administrado = 0
-
                 for g in st.session_state.grupos:
                     r = calcular_grupo_nomina(
                         puesto=g["puesto"],
@@ -202,110 +511,8 @@ if tipo == "nomina":
                         comision_pct=comision_pct,
                     )
                     resultados_grupos.append(r)
-                    costo_actual_total += r["actual"]["costo_total"]
-                    ahorro_total += r["ahorro_mensual"]
-                    total_empleados += g["num_empleados"]
-                    total_administrado += g["sueldo_bruto"] * g["num_empleados"]
 
-                # Métricas principales
-                st.markdown("### 📊 Resultados")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <h3>Costo Actual Mensual</h3>
-                        <p>{fmt_moneda(costo_actual_total)}</p>
-                    </div>""", unsafe_allow_html=True)
-                with col2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <h3>Empleados</h3>
-                        <p>{total_empleados}</p>
-                    </div>""", unsafe_allow_html=True)
-                with col3:
-                    st.markdown(f"""
-                    <div class="ahorro-verde">
-                        <h3>Ahorro Mensual IRT</h3>
-                        <p>{fmt_moneda(ahorro_total)}</p>
-                    </div>""", unsafe_allow_html=True)
-
-                st.markdown("")
-                pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
-
-                # Tabla resumen — Proyección de Ahorro
-                st.markdown("#### Proyección de Ahorro")
-                df_ahorro = pd.DataFrame({
-                    "Período": ["Mensual", "Anual", "2 Años", "3 Años"],
-                    "Ahorro IRT": [fmt_moneda(ahorro_total), fmt_moneda(ahorro_total * 12),
-                                    fmt_moneda(ahorro_total * 24), fmt_moneda(ahorro_total * 36)],
-                    "% Ahorro": [f"{pct_ahorro:.1f}%"] * 4,
-                })
-                st.dataframe(df_ahorro, use_container_width=True, hide_index=True)
-
-                # Gráfica comparativa
-                st.markdown("#### Comparativo de Costos")
-                import altair as alt
-                chart_data = pd.DataFrame({
-                    "Esquema": ["Actual (100%)", "IRT Propuesto"],
-                    "Costo Mensual": [costo_actual_total, costo_actual_total - ahorro_total]
-                })
-                chart = alt.Chart(chart_data).mark_bar().encode(
-                    x=alt.X("Esquema", sort=None),
-                    y="Costo Mensual",
-                    color=alt.Color("Esquema", scale=alt.Scale(
-                        domain=["Actual (100%)", "IRT Propuesto"],
-                        range=["#1B3A5C", "#27AE60"]
-                    ))
-                ).properties(height=350)
-                st.altair_chart(chart, use_container_width=True)
-
-                # Detalle por grupo
-                st.markdown("#### Detalle por Grupo")
-                for r in resultados_grupos:
-                    with st.expander(f"📋 {r['puesto']} — {r['num_empleados']} empleados a {fmt_moneda(r['sueldo_bruto'])}"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Costo actual/mes", fmt_moneda(r["actual"]["costo_total"]))
-                        with col2:
-                            st.metric("Ahorro IRT/mes", fmt_moneda(r["ahorro_mensual"]))
-
-                        st.write(f"**Base nómina IRT:** {fmt_moneda(r['irt']['base_nomina'])} | "
-                                 f"**Excedente IRT:** {fmt_moneda(r['irt']['excedente_irt'])}")
-                        st.write(f"**Neto trabajador actual:** {fmt_moneda(r['actual']['neto_trabajador'])} → "
-                                 f"**IRT:** {fmt_moneda(r['irt']['neto_trabajador'])}")
-
-                # === GENERAR WORD ===
-                st.markdown("---")
-                st.markdown("### 📄 Descargar Propuesta en Word")
-
-                datos_cliente = {
-                    "nombre_empresa": nombre_empresa or "Cliente",
-                    "contacto": contacto or "Sin especificar",
-                    "comision_pct": comision_pct,
-                }
-                resultados_word = {
-                    "total_empleados": total_empleados,
-                    "costo_actual_total": costo_actual_total,
-                    "ahorro_total_mensual": ahorro_total,
-                    "total_administrado": total_administrado,
-                }
-
-                buffer = generar_propuesta_word(
-                    datos_cliente=datos_cliente,
-                    tipo_servicio="nomina",
-                    resultados=resultados_word,
-                    grupos=resultados_grupos,
-                )
-
-                nombre_archivo = f"Propuesta_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
-                st.download_button(
-                    label="⬇️ DESCARGAR PROPUESTA EN WORD",
-                    data=buffer,
-                    file_name=nombre_archivo,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    type="primary",
-                    use_container_width=True,
-                )
+                mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
     else:
         st.info("👆 Agrega al menos un grupo de empleados para generar la propuesta.")
 
