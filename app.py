@@ -754,6 +754,7 @@ if tipo == "cotizador":
                 es_neto = tipo_sueldo == "Neto"
 
                 resultados_grupos = []
+                conversiones_neto = []  # Track neto→bruto conversions
                 for _, fila in df_agrupado.iterrows():
                     puesto_orig = fila[col_puesto]
                     sueldo = fila[col_sueldo]
@@ -764,6 +765,7 @@ if tipo == "cotizador":
 
                     if es_neto:
                         sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_cot)
+                        conversiones_neto.append({"puesto": puesto_orig, "neto": sueldo, "bruto": sueldo_bruto, "emp": n_emp})
                     else:
                         sueldo_bruto = sueldo
 
@@ -783,6 +785,15 @@ if tipo == "cotizador":
                     resultados_grupos.append(r)
 
                 if resultados_grupos:
+                    # Show neto→bruto conversion table if applicable
+                    if conversiones_neto:
+                        st.markdown('<div class="section-header"><h3>Conversion Neto a Bruto</h3></div>', unsafe_allow_html=True)
+                        df_conv = pd.DataFrame(conversiones_neto)
+                        df_conv.columns = ["Puesto", "Neto Original", "Bruto Estimado", "Empleados"]
+                        df_conv["Neto Original"] = df_conv["Neto Original"].apply(lambda x: fmt_moneda(x))
+                        df_conv["Bruto Estimado"] = df_conv["Bruto Estimado"].apply(lambda x: fmt_moneda(x))
+                        st.dataframe(df_conv, use_container_width=True, hide_index=True)
+
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
                 else:
                     st.warning("No se encontraron datos validos para calcular.")
@@ -807,8 +818,20 @@ elif tipo == "nomina":
             num_empleados = st.number_input("Numero de empleados", min_value=1, value=10, step=1, key="num_emp_nuevo")
 
         with col2:
-            sueldo_bruto = st.number_input("Sueldo bruto mensual ($)", min_value=1000, value=15000, step=500, key="sueldo_nuevo")
+            tipo_sueldo_manual = st.radio(
+                "El sueldo capturado es:",
+                options=["Bruto", "Neto"],
+                index=0,
+                horizontal=True,
+                key="tipo_sueldo_manual"
+            )
+            sueldo_input = st.number_input("Sueldo mensual ($)", min_value=1000, value=15000, step=500, key="sueldo_nuevo")
             clase_riesgo = st.selectbox("Clase de riesgo IMSS", options=["I", "II", "III", "IV", "V"], key="riesgo_nuevo")
+
+        # Show conversion preview if neto
+        if tipo_sueldo_manual == "Neto":
+            bruto_preview = neto_a_bruto(sueldo_input, clase_riesgo)
+            st.info(f"Neto capturado: **{fmt_moneda(sueldo_input)}** → Bruto estimado: **{fmt_moneda(bruto_preview)}**")
 
         # Base IMSS libre
         if puesto_sel != "Otro (personalizado)":
@@ -830,10 +853,16 @@ elif tipo == "nomina":
         if st.button("Agregar grupo", type="primary", use_container_width=True):
             puesto_nombre = puesto_custom if puesto_sel == "Otro (personalizado)" else puesto_sel
 
+            # Convert neto to bruto if needed
+            if tipo_sueldo_manual == "Neto":
+                sueldo_bruto_final = neto_a_bruto(sueldo_input, clase_riesgo)
+            else:
+                sueldo_bruto_final = sueldo_input
+
             st.session_state.grupos.append({
                 "puesto": puesto_nombre,
                 "num_empleados": num_empleados,
-                "sueldo_bruto": sueldo_bruto,
+                "sueldo_bruto": sueldo_bruto_final,
                 "clase_riesgo": clase_riesgo,
                 "minimo_profesional": base_imss_libre,
             })
@@ -886,8 +915,9 @@ elif tipo == "excedentes":
     st.markdown('<div class="section-header"><h3>Administracion de Excedentes</h3></div>', unsafe_allow_html=True)
     st.markdown("Para bonos, comisiones, viaticos y otros conceptos excedentes al salario base.")
 
-    monto_excedente = st.number_input("Monto total de excedentes mensuales ($)",
-                                       min_value=1000, value=100000, step=5000)
+    monto_excedente = st.number_input("Monto neto de excedentes a dispersar ($)",
+                                       min_value=1000, value=100000, step=5000,
+                                       help="Monto que el trabajador recibira como excedente (bono, comision, viatico, etc.)")
 
     if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
         r = calcular_excedentes(monto_excedente, comision_pct)
@@ -943,23 +973,48 @@ elif tipo == "excedentes":
         })
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-        # Generar Word
+        # Descargas
         st.markdown("---")
+        st.markdown('<div class="section-header"><h3>Descargar Propuesta</h3></div>', unsafe_allow_html=True)
         datos_cliente = {
             "nombre_empresa": nombre_empresa or "Cliente",
             "contacto": contacto or "Sin especificar",
             "comision_pct": comision_pct,
         }
-        buffer = generar_propuesta_word(datos_cliente, "excedentes", r)
-        nombre_archivo = f"Propuesta_Excedentes_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
-        st.download_button(
-            label="DESCARGAR PROPUESTA EN WORD",
-            data=buffer,
-            file_name=nombre_archivo,
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            type="primary",
-            use_container_width=True,
-        )
+        buffer_word = generar_propuesta_word(datos_cliente, "excedentes", r)
+
+        # Excel for excedentes
+        buf_xl = io.BytesIO()
+        df_xl = pd.DataFrame({
+            "Concepto": ["Excedente a dispersar", "Comision", "Subtotal", "IVA", "Total factura",
+                         "Costo si pagara por nomina", "Ahorro mensual", "Ahorro anual"],
+            "Monto": [r["monto_excedente"], r["comision"], r["monto_excedente"] + r["comision"],
+                      r["iva"], r["total_factura"],
+                      r["costo_hipotetico_nomina"], r["ahorro_mensual"], r["ahorro_anual"]]
+        })
+        df_xl.to_excel(buf_xl, index=False, sheet_name="Excedentes")
+        buf_xl.seek(0)
+
+        nombre_base = f"{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}"
+        col_w, col_e = st.columns(2)
+        with col_w:
+            st.download_button(
+                label="DESCARGAR WORD",
+                data=buffer_word,
+                file_name=f"Propuesta_Excedentes_{nombre_base}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                type="primary",
+                use_container_width=True,
+            )
+        with col_e:
+            st.download_button(
+                label="DESCARGAR EXCEL",
+                data=buf_xl,
+                file_name=f"Propuesta_Excedentes_{nombre_base}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="secondary",
+                use_container_width=True,
+            )
 
 
 # ============================================================
@@ -1037,6 +1092,15 @@ elif tipo == "sc":
 
             for r in resultados_sc:
                 st.markdown(f'<div class="section-header"><h3>{r["nombre"]}</h3></div>', unsafe_allow_html=True)
+
+                # Clear cost summary when piramidando
+                if r.get("piramidar"):
+                    st.markdown(
+                        f"Para que el directivo reciba **{fmt_moneda(r['neto_total'])}** netos, "
+                        f"el ingreso bruto necesario es **{fmt_moneda(r['ingreso_total'])}** "
+                        f"y el costo total (con comision + IVA) es **{fmt_moneda(r['total_factura'])}**."
+                    )
+
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.markdown(f"""
@@ -1119,22 +1183,56 @@ elif tipo == "sc":
                 st.dataframe(df, use_container_width=True, hide_index=True)
                 st.markdown("---")
 
-            # Generar Word
+            # Descargas
+            st.markdown('<div class="section-header"><h3>Descargar Propuesta</h3></div>', unsafe_allow_html=True)
             datos_cliente = {
                 "nombre_empresa": nombre_empresa or "Cliente",
                 "contacto": contacto or "Sin especificar",
                 "comision_pct": comision_pct,
             }
-            buffer = generar_propuesta_word(datos_cliente, "sc", resultados_sc)
-            nombre_archivo = f"Propuesta_SC_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
-            st.download_button(
-                label="DESCARGAR PROPUESTA EN WORD",
-                data=buffer,
-                file_name=nombre_archivo,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                type="primary",
-                use_container_width=True,
-            )
+            buffer_word = generar_propuesta_word(datos_cliente, "sc", resultados_sc)
+
+            # Excel for SC
+            buf_xl = io.BytesIO()
+            rows_xl = []
+            for r in resultados_sc:
+                rows_xl.append({
+                    "Directivo": r["nombre"],
+                    "Ingreso Bruto": round(r["ingreso_total"], 2),
+                    "Anticipo": round(r["anticipo"], 2),
+                    "ISR Anticipo": round(r["isr_anticipo"]["isr_neto"], 2),
+                    "Renta Vitalicia": round(r["renta"], 2),
+                    "Neto Total": round(r["neto_total"], 2),
+                    "Comision": round(r["comision"], 2),
+                    "IVA": round(r["iva"], 2),
+                    "Total Factura": round(r["total_factura"], 2),
+                    "Costo Nomina 100%": round(r["costo_nomina_100"], 2),
+                    "Ahorro Mensual": round(r["ahorro_cliente_mensual"], 2),
+                    "Ahorro Anual": round(r["ahorro_cliente_anual"], 2),
+                })
+            pd.DataFrame(rows_xl).to_excel(buf_xl, index=False, sheet_name="Sociedad Civil")
+            buf_xl.seek(0)
+
+            nombre_base = f"{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}"
+            col_w, col_e = st.columns(2)
+            with col_w:
+                st.download_button(
+                    label="DESCARGAR WORD",
+                    data=buffer_word,
+                    file_name=f"Propuesta_SC_{nombre_base}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    type="primary",
+                    use_container_width=True,
+                )
+            with col_e:
+                st.download_button(
+                    label="DESCARGAR EXCEL",
+                    data=buf_xl,
+                    file_name=f"Propuesta_SC_{nombre_base}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="secondary",
+                    use_container_width=True,
+                )
     else:
         st.info("Agrega al menos un directivo/socio para generar la propuesta.")
 
