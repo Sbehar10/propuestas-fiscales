@@ -12,9 +12,10 @@ SALARIO_MINIMO_FRONTERA = 440.87       # Salario mínimo zona libre frontera nor
 SALARIO_MINIMO_MENSUAL = SALARIO_MINIMO_DIARIO * 30.4
 
 IVA = 0.16
-ISN_TASA = 0.03               # Impuesto Sobre Nómina (CDMX default, configurable por estado)
+ISN_TASA = 0.03               # Impuesto Sobre Nómina (CDMX default 3%, configurable por estado/cliente)
 INFONAVIT_TASA = 0.05
 TOPE_SBC_UMA = 25              # Tope de cotización IMSS: 25 UMA
+FACTOR_INTEGRACION = 1.0493    # Factor de integración SBC (aguinaldo 15d + vac 12d + prima vac 25%)
 
 # === TABLA ISR MENSUAL ART. 96 LISR 2026 (Anexo 8 RMF 2026, DOF 28-dic-2025) ===
 TABLA_ISR_MENSUAL = [

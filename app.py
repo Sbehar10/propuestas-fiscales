@@ -137,7 +137,7 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         costo_actual_total += r["actual"]["costo_total"]
         ahorro_total += r["ahorro_mensual"]
         total_empleados += r["num_empleados"]
-        total_administrado += r["sueldo_bruto"] * r["num_empleados"]
+        total_administrado += r["irt"]["total_administrado"] * r["num_empleados"]
 
     # Métricas principales
     st.markdown("### 📊 Resultados")

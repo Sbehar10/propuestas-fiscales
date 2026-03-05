@@ -1,5 +1,6 @@
 # motor_calculo.py — Motor de cálculo fiscal
 # ISR, IMSS desglosado, IRT, Excedentes, Sociedad Civil
+# Alineado con cotizadores Excel (Propuesta Esquema, Excedentes, SC)
 
 from constantes import *
 
@@ -40,11 +41,22 @@ def calcular_isr(base_gravable):
 
 
 # ============================================================
-# TASA CESANTÍA Y VEJEZ PATRONAL (tabla graduada 2026)
+# SBC (Salario Base de Cotización)
 # ============================================================
-def obtener_tasa_cesantia_patronal(sbc_mensual):
+def calcular_sbc_diario(salario_diario):
+    """SBC diario = SD * factor de integración, topado a 25 UMA.
+    Factor 1.0493 integra aguinaldo 15d, vacaciones 12d, prima vacacional 25%.
+    Fórmula Excel: =IF(SD*1.0493 > UMA*25, UMA*25, SD*1.0493)"""
+    sbc = round(salario_diario * FACTOR_INTEGRACION, 2)
+    tope = UMA_DIARIO * TOPE_SBC_UMA
+    return min(sbc, tope)
+
+
+# ============================================================
+# TASA CESANTÍA Y VEJEZ PATRONAL (tabla graduada)
+# ============================================================
+def obtener_tasa_cesantia_patronal(sbc_diario):
     """Determina la tasa patronal de cesantía y vejez según rango de SBC en UMAs"""
-    sbc_diario = sbc_mensual / 30.4
     ratio_uma = sbc_diario / UMA_DIARIO
     for rango in CESANTIA_VEJEZ_PATRONAL:
         if ratio_uma <= rango["hasta_uma"]:
@@ -53,49 +65,30 @@ def obtener_tasa_cesantia_patronal(sbc_mensual):
 
 
 # ============================================================
-# CÁLCULO DE CUOTAS IMSS DESGLOSADO
+# CUOTAS IMSS PATRONALES (desglosado, solo patronal)
 # ============================================================
-def calcular_imss_patronal(sbc_mensual, clase_riesgo="I"):
-    """Calcula cuotas IMSS patronales desglosadas con tope de 25 UMA"""
-    tope = UMA_MENSUAL * TOPE_SBC_UMA
-    sbc = min(sbc_mensual, tope)
-    uma_m = UMA_MENSUAL
-    tres_uma = uma_m * 3
+def calcular_imss_patronal(salario_diario, dias=30.4, clase_riesgo="I"):
+    """Cuotas IMSS patronales desglosadas. Calcula SBC internamente."""
+    sbc = calcular_sbc_diario(salario_diario)
 
-    # Cuota fija: sobre 1 UMA (siempre, independiente del SBC)
-    cuota_fija = uma_m * (IMSS_PATRONAL["cuota_fija"] / 100)
-
-    # Excedente de 3 UMA: solo si SBC > 3 UMA
-    excedente_base = max(sbc - tres_uma, 0)
-    excedente = excedente_base * (IMSS_PATRONAL["excedente_3uma_patronal"] / 100)
-
-    # Prestaciones en dinero
-    prest_dinero = sbc * (IMSS_PATRONAL["prest_dinero_patronal"] / 100)
-
-    # Gastos médicos pensionados
-    pensionados = sbc * (IMSS_PATRONAL["pensionados_patronal"] / 100)
-
-    # Invalidez y vida
-    invalidez = sbc * (IMSS_PATRONAL["invalidez_patronal"] / 100)
-
-    # Riesgo de trabajo
+    cuota_fija = round(UMA_DIARIO * (IMSS_PATRONAL["cuota_fija"] / 100) * dias, 2)
+    exc_base = max(sbc - 3 * UMA_DIARIO, 0)
+    excedente = round(exc_base * (IMSS_PATRONAL["excedente_3uma_patronal"] / 100) * dias, 2)
+    prest_dinero = round(sbc * (IMSS_PATRONAL["prest_dinero_patronal"] / 100) * dias, 2)
+    pensionados = round(sbc * (IMSS_PATRONAL["pensionados_patronal"] / 100) * dias, 2)
+    invalidez = round(sbc * (IMSS_PATRONAL["invalidez_patronal"] / 100) * dias, 2)
     prima_rt = PRIMA_RIESGO.get(str(clase_riesgo), PRIMA_RIESGO["I"])
-    riesgo = sbc * (prima_rt / 100)
-
-    # Guarderías y prestaciones sociales
-    guarderias = sbc * (IMSS_PATRONAL["guarderias"] / 100)
-
-    # Retiro (SAR)
-    retiro = sbc * (IMSS_PATRONAL["retiro"] / 100)
-
-    # Cesantía y vejez (tabla graduada 2026)
+    riesgo = round(sbc * (prima_rt / 100) * dias, 2)
+    guarderias = round(sbc * (IMSS_PATRONAL["guarderias"] / 100) * dias, 2)
+    retiro = round(sbc * (IMSS_PATRONAL["retiro"] / 100) * dias, 2)
     tasa_cesantia = obtener_tasa_cesantia_patronal(sbc)
-    cesantia = sbc * (tasa_cesantia / 100)
+    cesantia = round(sbc * (tasa_cesantia / 100) * dias, 2)
 
     total = (cuota_fija + excedente + prest_dinero + pensionados +
              invalidez + riesgo + guarderias + retiro + cesantia)
 
     return {
+        "sbc_diario": sbc,
         "cuota_fija": cuota_fija,
         "excedente_3uma": excedente,
         "prest_dinero": prest_dinero,
@@ -110,18 +103,19 @@ def calcular_imss_patronal(sbc_mensual, clase_riesgo="I"):
     }
 
 
-def calcular_imss_obrero(sbc_mensual):
-    """Calcula cuotas IMSS obreras (descuento al trabajador) con tope de 25 UMA"""
-    tope = UMA_MENSUAL * TOPE_SBC_UMA
-    sbc = min(sbc_mensual, tope)
-    tres_uma = UMA_MENSUAL * 3
+# ============================================================
+# CUOTAS IMSS OBRERAS (desglosado)
+# ============================================================
+def calcular_imss_obrero(salario_diario, dias=30.4):
+    """Cuotas IMSS obreras (descuento al trabajador). Calcula SBC internamente."""
+    sbc = calcular_sbc_diario(salario_diario)
 
-    excedente_base = max(sbc - tres_uma, 0)
-    excedente = excedente_base * (IMSS_OBRERO["excedente_3uma_obrero"] / 100)
-    prest_dinero = sbc * (IMSS_OBRERO["prest_dinero_obrero"] / 100)
-    pensionados = sbc * (IMSS_OBRERO["pensionados_obrero"] / 100)
-    invalidez = sbc * (IMSS_OBRERO["invalidez_obrero"] / 100)
-    cesantia = sbc * (IMSS_OBRERO["cesantia_obrero"] / 100)
+    exc_base = max(sbc - 3 * UMA_DIARIO, 0)
+    excedente = round(exc_base * (IMSS_OBRERO["excedente_3uma_obrero"] / 100) * dias, 2)
+    prest_dinero = round(sbc * (IMSS_OBRERO["prest_dinero_obrero"] / 100) * dias, 2)
+    pensionados = round(sbc * (IMSS_OBRERO["pensionados_obrero"] / 100) * dias, 2)
+    invalidez = round(sbc * (IMSS_OBRERO["invalidez_obrero"] / 100) * dias, 2)
+    cesantia = round(sbc * (IMSS_OBRERO["cesantia_obrero"] / 100) * dias, 2)
 
     total = excedente + prest_dinero + pensionados + invalidez + cesantia
 
@@ -136,7 +130,81 @@ def calcular_imss_obrero(sbc_mensual):
 
 
 # ============================================================
-# CÁLCULO DE PRESTACIONES DE LEY PROPORCIONAL MENSUAL
+# COSTO SOCIAL COMPLETO (IMSS pat+obr + RCV + INFONAVIT + ISN)
+# Replica la hoja IMSS de los cotizadores Excel.
+# En IRT el patrón absorbe ambas porciones vía PPS.
+# ============================================================
+def calcular_costo_social(salario_diario, dias=30.4, clase_riesgo="I", isn_tasa=None):
+    """
+    Costo social total para el esquema IRT.
+    Usa tasas combinadas (patronal + obrero) como en los cotizadores Excel,
+    porque en IRT el patrón absorbe ambas porciones vía PPS.
+    """
+    if isn_tasa is None:
+        isn_tasa = ISN_TASA
+
+    sbc = calcular_sbc_diario(salario_diario)
+
+    # --- IMSS mensual (tasas combinadas pat + obr) ---
+    cuota_fija = round(UMA_DIARIO * (IMSS_PATRONAL["cuota_fija"] / 100) * dias, 2)
+
+    exc_base = max(sbc - 3 * UMA_DIARIO, 0)
+    tasa_exc = (IMSS_PATRONAL["excedente_3uma_patronal"] + IMSS_OBRERO["excedente_3uma_obrero"]) / 100
+    excedente = round(exc_base * tasa_exc * dias, 2)
+
+    tasa_pd = (IMSS_PATRONAL["prest_dinero_patronal"] + IMSS_OBRERO["prest_dinero_obrero"]) / 100
+    prest_dinero = round(sbc * tasa_pd * dias, 2)
+
+    tasa_pen = (IMSS_PATRONAL["pensionados_patronal"] + IMSS_OBRERO["pensionados_obrero"]) / 100
+    pensionados = round(sbc * tasa_pen * dias, 2)
+
+    prima_rt = PRIMA_RIESGO.get(str(clase_riesgo), PRIMA_RIESGO["I"]) / 100
+    riesgo = round(sbc * prima_rt * dias, 2)
+
+    tasa_inv = (IMSS_PATRONAL["invalidez_patronal"] + IMSS_OBRERO["invalidez_obrero"]) / 100
+    invalidez = round(sbc * tasa_inv * dias, 2)
+
+    guarderias = round(sbc * (IMSS_PATRONAL["guarderias"] / 100) * dias, 2)
+
+    total_imss = cuota_fija + excedente + prest_dinero + pensionados + riesgo + invalidez + guarderias
+
+    # --- RCV bimestral ---
+    retiro = round(sbc * (IMSS_PATRONAL["retiro"] / 100) * dias, 2)
+
+    tasa_ces_pat = obtener_tasa_cesantia_patronal(sbc) / 100
+    tasa_ces_obr = IMSS_OBRERO["cesantia_obrero"] / 100
+    cesantia = round(sbc * (tasa_ces_pat + tasa_ces_obr) * dias, 2)
+
+    infonavit = round(sbc * INFONAVIT_TASA * dias, 2)
+
+    total_rcv = retiro + cesantia + infonavit
+
+    # --- ISN (sobre salario base, NO sobre SBC) ---
+    isn = round(salario_diario * dias * isn_tasa, 2)
+
+    total = total_imss + total_rcv + isn
+
+    return {
+        "sbc_diario": sbc,
+        "cuota_fija": cuota_fija,
+        "excedente_3uma": excedente,
+        "prest_dinero": prest_dinero,
+        "pensionados": pensionados,
+        "riesgo_trabajo": riesgo,
+        "invalidez": invalidez,
+        "guarderias": guarderias,
+        "total_imss": total_imss,
+        "retiro": retiro,
+        "cesantia": cesantia,
+        "infonavit": infonavit,
+        "total_rcv": total_rcv,
+        "isn": isn,
+        "total": total,
+    }
+
+
+# ============================================================
+# PRESTACIONES DE LEY (proporcional mensual)
 # ============================================================
 def calcular_prestaciones_ley(sueldo_diario):
     """Aguinaldo, vacaciones, prima vacacional (proporcional mensual)"""
@@ -154,17 +222,20 @@ def calcular_prestaciones_ley(sueldo_diario):
 
 
 # ============================================================
-# CÁLCULO COMPLETO - ESQUEMA ACTUAL (100% NÓMINA)
+# ESQUEMA ACTUAL (100% NÓMINA) — para comparación
 # ============================================================
 def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1):
-    """Costo total para el patrón con nómina 100%"""
+    """Costo total para el patrón con nómina 100% formal. IMSS sobre SBC."""
+    dias = 30
+    salario_diario = sueldo_bruto / dias
+    sbc = calcular_sbc_diario(salario_diario)
+
     isr = calcular_isr(sueldo_bruto)
-    imss_pat = calcular_imss_patronal(sueldo_bruto, clase_riesgo)
-    imss_obr = calcular_imss_obrero(sueldo_bruto)
-    infonavit = sueldo_bruto * INFONAVIT_TASA
-    isn = sueldo_bruto * ISN_TASA
-    sueldo_diario = sueldo_bruto / 30.4
-    prestaciones = calcular_prestaciones_ley(sueldo_diario)
+    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo)
+    imss_obr = calcular_imss_obrero(salario_diario, 30.4)
+    infonavit = round(sbc * INFONAVIT_TASA * 30.4, 2)
+    isn = round(sueldo_bruto * ISN_TASA, 2)
+    prestaciones = calcular_prestaciones_ley(salario_diario)
 
     costo_por_empleado = sueldo_bruto + imss_pat["total"] + infonavit + isn + prestaciones["total_mensual"]
     neto_trabajador = sueldo_bruto - isr["isr_neto"] - imss_obr["total"]
@@ -185,46 +256,67 @@ def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1):
 
 
 # ============================================================
-# CÁLCULO COMPLETO - ESQUEMA IRT (UN SOLO ESQUEMA)
+# ESQUEMA IRT — Replica cotizador Excel "Propuesta Esquema"
 # ============================================================
-def calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
-                          comision_pct, num_empleados=1):
+def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
+                          comision_pct, num_empleados=1, dias=30, isn_tasa=None):
     """
-    Cálculo del esquema IRT.
-    Base IMSS = mínimo profesional del puesto (piso: salario mínimo).
-    Diferencial (bruto - mínimo profesional) = IRT exento (Art. 93 fr. III LISR).
-    """
-    # Base nómina = mínimo profesional, con piso en salario mínimo
-    base_nomina = max(minimo_profesional, SALARIO_MINIMO_MENSUAL)
-    excedente_irt = sueldo_bruto - base_nomina
+    Esquema IRT (Indemnización por Riesgo de Trabajo).
 
-    if excedente_irt < 0:
-        excedente_irt = 0
+    sueldo_bruto = TOTAL DEPOSITO: lo que el empleado debe recibir.
+    base_imss_mensual = base libre para IMSS (mínimo, profesional, o cualquier monto).
+    Comisión sobre (nómina + cargas sociales) como en el cotizador Excel.
+
+    Flujo Excel:
+      SUELDO = dias * SD
+      ISR Art 96 sobre SUELDO
+      PPS = DEPOSITO - SUELDO + ISR_NETO
+      COSTO SOCIAL = IMSS combinado (pat+obr) + ISN
+      NOMINA + CARGAS = (SUELDO + PPS) + COSTO SOCIAL
+      COMISION = (NOMINA + CARGAS) * %
+      TOTAL FACTURA = (NOMINA + CARGAS + COMISION) * 1.16
+    """
+    # Base nómina con piso en salario mínimo
+    base_nomina = max(base_imss_mensual, SALARIO_MINIMO_MENSUAL)
+    if base_nomina > sueldo_bruto:
         base_nomina = sueldo_bruto
 
-    # Cálculos sobre la base reducida
+    salario_diario = base_nomina / dias
+
+    # ISR sobre la base nómina
     isr = calcular_isr(base_nomina)
-    imss_pat = calcular_imss_patronal(base_nomina, clase_riesgo)
-    imss_obr = calcular_imss_obrero(base_nomina)
-    infonavit = base_nomina * INFONAVIT_TASA
-    isn = base_nomina * ISN_TASA
-    sueldo_diario = base_nomina / 30.4
-    prestaciones = calcular_prestaciones_ley(sueldo_diario)
+    sueldo_neto = base_nomina - isr["isr_neto"]
 
-    # Costo de nómina (parte formal)
-    costo_nomina = base_nomina + imss_pat["total"] + infonavit + isn + prestaciones["total_mensual"]
+    # PPS/IRT = lo que completa el depósito total
+    # Excel: PPS = DEPOSITO - SUELDO + ISR_NETO
+    excedente_irt = sueldo_bruto - sueldo_neto
 
-    # Total a administrar por empleado (nómina + IRT)
-    total_administrado = sueldo_bruto
+    # IMSS desglosado patronal y obrero (para display en Word/app)
+    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo)
+    imss_obr = calcular_imss_obrero(salario_diario, 30.4)
 
-    # Comisión y facturación (por empleado)
-    comision = total_administrado * (comision_pct / 100)
-    subtotal_factura = total_administrado + comision
-    iva = subtotal_factura * IVA
+    # Costo social combinado (pat+obr, como en cotizador Excel)
+    costo_social = calcular_costo_social(salario_diario, 30.4, clase_riesgo, isn_tasa)
+    infonavit = costo_social["infonavit"]
+    isn = costo_social["isn"]
+
+    # Prestaciones de ley
+    prestaciones = calcular_prestaciones_ley(salario_diario)
+
+    # Costo nómina = sueldo + PPS = depósito + ISR_neto
+    costo_nomina = base_nomina + excedente_irt
+
+    # Nómina + Cargas (base para comisión)
+    nomina_y_cargas = costo_nomina + costo_social["total"]
+
+    # Comisión sobre (nómina + cargas) — como en cotizador Excel
+    comision = round(nomina_y_cargas * (comision_pct / 100), 2)
+    subtotal_factura = nomina_y_cargas + comision
+    iva = round(subtotal_factura * IVA, 2)
     total_factura = subtotal_factura + iva
 
-    # Neto del trabajador (recibe lo mismo o más)
-    neto_trabajador = base_nomina - isr["isr_neto"] - imss_obr["total"] + excedente_irt
+    # Neto al trabajador: recibe el depósito completo (PPS cubre ISR)
+    neto_trabajador = sueldo_bruto
 
     return {
         "base_nomina": base_nomina,
@@ -236,8 +328,10 @@ def calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
         "isn": isn,
         "prestaciones": prestaciones,
         "costo_nomina": costo_nomina,
-        "total_administrado": total_administrado,
+        "costo_social": costo_social["total"],
+        "total_administrado": nomina_y_cargas,
         "comision": comision,
+        "subtotal_factura": subtotal_factura,
         "iva": iva,
         "total_factura": total_factura,
         "costo_total_factura": total_factura * num_empleados,
@@ -247,21 +341,29 @@ def calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
 
 
 # ============================================================
-# CÁLCULO COMPLETO - EXCEDENTES
+# EXCEDENTES
 # ============================================================
 def calcular_excedentes(monto_excedente, comision_pct):
-    """Cálculo cuando solo se administran excedentes (bonos, comisiones, etc.)"""
-    comision = monto_excedente * (comision_pct / 100)
+    """
+    Administración de excedentes (bonos, comisiones, viáticos).
+    Replica cotizador Excel "Propuesta Excedentes".
+    Comisión sobre el excedente, + IVA.
+    """
+    comision = round(monto_excedente * (comision_pct / 100), 2)
     subtotal = monto_excedente + comision
-    iva = subtotal * IVA
+    iva = round(subtotal * IVA, 2)
     total_factura = subtotal + iva
 
     # Costo hipotético si el cliente pagara esto por nómina
-    imss_pat_hipotetico = calcular_imss_patronal(monto_excedente, "I")
-    costo_hipotetico = (monto_excedente + imss_pat_hipotetico["total"] +
-                        monto_excedente * INFONAVIT_TASA + monto_excedente * ISN_TASA)
+    sd_hipotetico = monto_excedente / 30
+    sbc_hip = calcular_sbc_diario(sd_hipotetico)
+    imss_pat_hipotetico = calcular_imss_patronal(sd_hipotetico, 30.4, "I")
+    infonavit_hip = round(sbc_hip * INFONAVIT_TASA * 30.4, 2)
+    isn_hip = round(monto_excedente * ISN_TASA, 2)
+    costo_hipotetico = monto_excedente + imss_pat_hipotetico["total"] + infonavit_hip + isn_hip
 
-    ahorro = costo_hipotetico - total_factura
+    # Ahorro: costo nómina hipotético vs subtotal factura (pre-IVA)
+    ahorro = costo_hipotetico - subtotal
 
     return {
         "monto_excedente": monto_excedente,
@@ -275,13 +377,14 @@ def calcular_excedentes(monto_excedente, comision_pct):
 
 
 # ============================================================
-# CÁLCULO COMPLETO - SOCIEDAD CIVIL
+# SOCIEDAD CIVIL — Replica cotizador Excel "Propuesta SC"
 # ============================================================
 def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar=False, neto_deseado=0):
     """
-    Cálculo del esquema Sociedad Civil.
+    Esquema Sociedad Civil.
     pct_anticipo: 10 o 20 (% anticipo por remanente — gravado, retención ISR Art. 96)
-    El resto (90% o 80%) va como renta vitalicia (exenta, Art. 93 fr. IV LISR)
+    El resto (90% o 80%) va como renta vitalicia (exenta, Art. 93 fr. IV LISR).
+    Modo pirámidar: el cliente dice cuánto quiere recibir neto, calculamos el bruto.
     """
     if piramidar and neto_deseado > 0:
         ingreso_total = _piramidar_sc(neto_deseado, pct_anticipo, comision_pct)
@@ -296,21 +399,25 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     neto_anticipo = anticipo - isr_anticipo["isr_neto"]
     neto_total = neto_anticipo + renta  # renta es exenta al 100%
 
-    # Facturación
-    comision = ingreso_total * (comision_pct / 100)
+    # Facturación: comisión sobre ingreso total (como en cotizador Excel SC)
+    comision = round(ingreso_total * (comision_pct / 100), 2)
     subtotal = ingreso_total + comision
-    iva = subtotal * IVA
+    iva = round(subtotal * IVA, 2)
     total_factura = subtotal + iva
 
     # Comparativo vs nómina 100%
+    sd = ingreso_total / 30
+    sbc = calcular_sbc_diario(sd)
     isr_nomina = calcular_isr(ingreso_total)
-    imss_pat = calcular_imss_patronal(ingreso_total, "I")
-    imss_obr = calcular_imss_obrero(ingreso_total)
-    costo_nomina_100 = (ingreso_total + imss_pat["total"] +
-                         ingreso_total * INFONAVIT_TASA + ingreso_total * ISN_TASA)
+    imss_pat = calcular_imss_patronal(sd, 30.4, "I")
+    imss_obr = calcular_imss_obrero(sd, 30.4)
+    infonavit_nom = round(sbc * INFONAVIT_TASA * 30.4, 2)
+    isn_nom = round(ingreso_total * ISN_TASA, 2)
+    costo_nomina_100 = ingreso_total + imss_pat["total"] + infonavit_nom + isn_nom
     neto_nomina = ingreso_total - isr_nomina["isr_neto"] - imss_obr["total"]
 
-    ahorro_cliente = costo_nomina_100 - total_factura
+    # Ahorro: costo nómina 100% vs subtotal factura SC (pre-IVA, el IVA es acreditable)
+    ahorro_cliente = costo_nomina_100 - subtotal
 
     return {
         "ingreso_total": ingreso_total,
@@ -345,7 +452,8 @@ def neto_a_bruto(neto_deseado, clase_riesgo="I"):
     for _ in range(100):
         mid = (low + high) / 2
         isr = calcular_isr(mid)
-        imss_obr = calcular_imss_obrero(mid)
+        sd = mid / 30
+        imss_obr = calcular_imss_obrero(sd, 30.4)
         neto = mid - isr["isr_neto"] - imss_obr["total"]
         if abs(neto - neto_deseado) < 0.50:
             return round(mid, 2)
@@ -379,13 +487,14 @@ def _piramidar_sc(neto_deseado, pct_anticipo, comision_pct):
 # ============================================================
 def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
                            minimo_profesional, comision_pct):
-    """Calcula el resumen completo para un grupo: Actual vs IRT (un solo esquema)"""
+    """Calcula el resumen completo para un grupo: Actual vs IRT"""
     actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados)
 
     irt = calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
                                 comision_pct, num_empleados)
 
-    ahorro = actual["costo_total"] - (irt["total_factura"] * num_empleados)
+    # Ahorro: costo interno actual vs subtotal factura IRT (pre-IVA, el IVA es acreditable)
+    ahorro = actual["costo_total"] - (irt["subtotal_factura"] * num_empleados)
 
     return {
         "puesto": puesto,
