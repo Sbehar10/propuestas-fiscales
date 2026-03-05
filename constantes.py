@@ -14,6 +14,42 @@ SALARIO_MINIMO_MENSUAL = SALARIO_MINIMO_DIARIO * 30.4
 IVA = 0.16
 ISN_TASA = 0.03               # Impuesto Sobre Nómina (CDMX default 3%, configurable por estado/cliente)
 INFONAVIT_TASA = 0.05
+
+# === TASAS ISN POR ESTADO (Impuesto Sobre Nómina 2026) ===
+ISN_TASAS_ESTADO = {
+    "Aguascalientes": 0.025,
+    "Baja California": 0.018,
+    "Baja California Sur": 0.025,
+    "Campeche": 0.03,
+    "Chiapas": 0.02,
+    "Chihuahua": 0.03,
+    "Ciudad de México": 0.03,
+    "Coahuila": 0.02,
+    "Colima": 0.02,
+    "Durango": 0.02,
+    "Estado de México": 0.03,
+    "Guanajuato": 0.0295,
+    "Guerrero": 0.02,
+    "Hidalgo": 0.025,
+    "Jalisco": 0.02,
+    "Michoacán": 0.025,
+    "Morelos": 0.02,
+    "Nayarit": 0.02,
+    "Nuevo León": 0.03,
+    "Oaxaca": 0.03,
+    "Puebla": 0.03,
+    "Querétaro": 0.02,
+    "Quintana Roo": 0.03,
+    "San Luis Potosí": 0.025,
+    "Sinaloa": 0.024,
+    "Sonora": 0.02,
+    "Tabasco": 0.025,
+    "Tamaulipas": 0.03,
+    "Tlaxcala": 0.03,
+    "Veracruz": 0.03,
+    "Yucatán": 0.025,
+    "Zacatecas": 0.025,
+}
 TOPE_SBC_UMA = 25              # Tope de cotización IMSS: 25 UMA
 FACTOR_INTEGRACION = 1.0493    # Factor de integración SBC (aguinaldo 15d + vac 12d + prima vac 25%)
 

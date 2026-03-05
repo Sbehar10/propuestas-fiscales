@@ -1,8 +1,12 @@
 import streamlit as st
 import pandas as pd
 import io
+import constantes
 from datetime import datetime
-from constantes import LISTA_PUESTOS, PUESTOS_PROFESIONALES, PRIMA_RIESGO, SALARIO_MINIMO_MENSUAL
+from constantes import (
+    LISTA_PUESTOS, PUESTOS_PROFESIONALES, PRIMA_RIESGO,
+    SALARIO_MINIMO_MENSUAL, ISN_TASAS_ESTADO,
+)
 from motor_calculo import (
     calcular_esquema_actual, calcular_esquema_irt, calcular_excedentes,
     calcular_sociedad_civil, calcular_grupo_nomina, neto_a_bruto
@@ -14,44 +18,62 @@ from generador_word import generar_propuesta_word, fmt_moneda
 
 # === CONFIGURACION DE PAGINA ===
 st.set_page_config(
-    page_title="Generador de Propuestas Fiscales",
+    page_title="Sistema de Cotizacion Fiscal 2026",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# === ESTILOS CSS PERSONALIZADOS ===
+# === ESTILOS CSS ===
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(135deg, #1B3A5C 0%, #2C5F8A 100%);
-        padding: 2rem;
-        border-radius: 10px;
+        background: linear-gradient(135deg, #0E1F33 0%, #1B3A5C 40%, #2C5F8A 100%);
+        padding: 2.5rem 2rem;
+        border-radius: 12px;
         margin-bottom: 2rem;
         text-align: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        border-bottom: 3px solid #C9A962;
     }
     .main-header h1 {
         color: #C9A962 !important;
-        font-size: 2rem !important;
+        font-size: 2.2rem !important;
         margin: 0 !important;
+        letter-spacing: 0.5px;
     }
     .main-header p {
-        color: #FFFFFF !important;
+        color: #D0D8E0 !important;
         font-size: 1rem;
         margin: 0.5rem 0 0 0;
     }
+    .section-header {
+        background: linear-gradient(90deg, #1B3A5C 0%, transparent 100%);
+        padding: 0.8rem 1.2rem;
+        border-radius: 8px;
+        border-left: 4px solid #C9A962;
+        margin: 1.5rem 0 1rem 0;
+    }
+    .section-header h3 {
+        color: #FFFFFF !important;
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+    }
     .metric-card {
-        background: #1B3A5C;
+        background: linear-gradient(145deg, #1B3A5C 0%, #162E4A 100%);
         padding: 1.5rem;
-        border-radius: 10px;
+        border-radius: 12px;
         text-align: center;
         border-left: 4px solid #C9A962;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        margin-bottom: 0.5rem;
     }
     .metric-card h3 {
         color: #C9A962 !important;
-        font-size: 0.85rem !important;
+        font-size: 0.8rem !important;
         margin: 0 !important;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     .metric-card p {
         color: #FFFFFF !important;
@@ -59,16 +81,26 @@ st.markdown("""
         font-weight: bold !important;
         margin: 0.5rem 0 0 0 !important;
     }
+    .metric-card .sub {
+        color: #8BA3BE !important;
+        font-size: 0.75rem !important;
+        font-weight: normal !important;
+        margin: 0.2rem 0 0 0 !important;
+    }
     .ahorro-verde {
-        background: linear-gradient(135deg, #27AE60 0%, #2ECC71 100%);
+        background: linear-gradient(145deg, #1E8449 0%, #27AE60 50%, #2ECC71 100%);
         padding: 1.5rem;
-        border-radius: 10px;
+        border-radius: 12px;
         text-align: center;
+        box-shadow: 0 2px 12px rgba(39,174,96,0.3);
+        margin-bottom: 0.5rem;
     }
     .ahorro-verde h3 {
-        color: #FFFFFF !important;
-        font-size: 0.85rem !important;
+        color: rgba(255,255,255,0.9) !important;
+        font-size: 0.8rem !important;
         margin: 0 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     .ahorro-verde p {
         color: #FFFFFF !important;
@@ -76,15 +108,60 @@ st.markdown("""
         font-weight: bold !important;
         margin: 0.5rem 0 0 0 !important;
     }
+    .ahorro-verde .sub {
+        color: rgba(255,255,255,0.8) !important;
+        font-size: 0.75rem !important;
+        font-weight: normal !important;
+    }
+    .estado-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #C9A962, #B8943F);
+        color: #0E1F33 !important;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        margin-top: 0.3rem;
+    }
+    .progress-bar {
+        display: flex;
+        justify-content: space-between;
+        margin: 1rem 0 2rem 0;
+        padding: 0;
+    }
+    .progress-step {
+        flex: 1;
+        text-align: center;
+        padding: 0.6rem 0.3rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #8BA3BE;
+        border-bottom: 3px solid #2C3E50;
+        transition: all 0.3s ease;
+    }
+    .progress-step.active {
+        color: #C9A962;
+        border-bottom-color: #C9A962;
+    }
+    .progress-step.done {
+        color: #27AE60;
+        border-bottom-color: #27AE60;
+    }
     .stButton>button {
         width: 100%;
     }
     div[data-testid="stSidebar"] {
-        background-color: #0E1F33;
+        background: linear-gradient(180deg, #0E1F33 0%, #162E4A 100%);
     }
     div[data-testid="stSidebar"] .stMarkdown p,
     div[data-testid="stSidebar"] .stMarkdown label {
         color: #FFFFFF;
+    }
+    .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -92,40 +169,202 @@ st.markdown("""
 # === HEADER ===
 st.markdown("""
 <div class="main-header">
-    <h1>📊 Generador de Propuestas Fiscales</h1>
-    <p>Sistema de cotización y generación de propuestas para clientes — Año fiscal 2026</p>
+    <h1>Sistema de Cotizacion Fiscal</h1>
+    <p>Cotizacion y generacion de propuestas para clientes — Ano fiscal 2026</p>
 </div>
 """, unsafe_allow_html=True)
 
-# === SIDEBAR — DATOS DEL CLIENTE ===
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _set_isn(tasa_isn):
+    """Set ISN_TASA globally before calculations (single-threaded Streamlit).
+    Must patch both constantes AND motor_calculo since motor_calculo uses 'from constantes import *'
+    which copies values at import time."""
+    import motor_calculo
+    constantes.ISN_TASA = tasa_isn
+    motor_calculo.ISN_TASA = tasa_isn
+
+
+def generar_excel_resultados(resultados_grupos, nombre_empresa, estado_nombre, tasa_isn):
+    """Generate Excel workbook with summary + detail sheets using openpyxl."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    wb = Workbook()
+
+    # -- Hoja Resumen --
+    ws = wb.active
+    ws.title = "Resumen"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1B3A5C", end_color="1B3A5C", fill_type="solid")
+    gold_font = Font(bold=True, color="C9A962", size=12)
+    border = Border(
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+
+    # Title
+    ws.merge_cells("A1:F1")
+    ws["A1"] = f"Propuesta Fiscal — {nombre_empresa or 'Cliente'}"
+    ws["A1"].font = Font(bold=True, size=14, color="1B3A5C")
+    ws["A2"] = f"Estado: {estado_nombre} (ISN {tasa_isn*100:.1f}%)"
+    ws["A2"].font = Font(size=10, color="666666")
+    ws["A3"] = f"Fecha: {datetime.now().strftime('%d/%m/%Y')}"
+    ws["A3"].font = Font(size=10, color="666666")
+
+    # Summary table
+    row = 5
+    headers = ["Puesto", "Empleados", "Sueldo Bruto", "Costo Actual", "Costo IRT", "Ahorro Mensual"]
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=c, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    total_actual = 0
+    total_irt = 0
+    total_ahorro = 0
+
+    for r in resultados_grupos:
+        row += 1
+        ws.cell(row=row, column=1, value=r["puesto"])
+        ws.cell(row=row, column=2, value=r["num_empleados"]).alignment = Alignment(horizontal="center")
+        ws.cell(row=row, column=3, value=round(r["sueldo_bruto"], 2)).number_format = '$#,##0.00'
+        ws.cell(row=row, column=4, value=round(r["actual"]["costo_total"], 2)).number_format = '$#,##0.00'
+        costo_irt = r["irt"]["subtotal_factura"] * r["num_empleados"]
+        ws.cell(row=row, column=5, value=round(costo_irt, 2)).number_format = '$#,##0.00'
+        ws.cell(row=row, column=6, value=round(r["ahorro_mensual"], 2)).number_format = '$#,##0.00'
+        for c in range(1, 7):
+            ws.cell(row=row, column=c).border = border
+
+        total_actual += r["actual"]["costo_total"]
+        total_irt += costo_irt
+        total_ahorro += r["ahorro_mensual"]
+
+    # Totals row
+    row += 1
+    ws.cell(row=row, column=1, value="TOTAL").font = Font(bold=True)
+    ws.cell(row=row, column=4, value=round(total_actual, 2)).number_format = '$#,##0.00'
+    ws.cell(row=row, column=4).font = Font(bold=True)
+    ws.cell(row=row, column=5, value=round(total_irt, 2)).number_format = '$#,##0.00'
+    ws.cell(row=row, column=5).font = Font(bold=True)
+    ws.cell(row=row, column=6, value=round(total_ahorro, 2)).number_format = '$#,##0.00'
+    ws.cell(row=row, column=6).font = gold_font
+
+    # Projection
+    row += 2
+    ws.cell(row=row, column=1, value="Proyeccion de Ahorro").font = Font(bold=True, size=12)
+    row += 1
+    for label, mult in [("Mensual", 1), ("Anual", 12), ("2 Anos", 24), ("3 Anos", 36)]:
+        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=2, value=round(total_ahorro * mult, 2)).number_format = '$#,##0.00'
+        row += 1
+
+    # Column widths
+    ws.column_dimensions["A"].width = 30
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 16
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 18
+    ws.column_dimensions["F"].width = 18
+
+    # -- Hoja Detalle --
+    ws2 = wb.create_sheet("Detalle por Grupo")
+    detail_row = 1
+    for r in resultados_grupos:
+        ws2.cell(row=detail_row, column=1, value=r["puesto"]).font = Font(bold=True, size=11)
+        ws2.cell(row=detail_row, column=2, value=f"{r['num_empleados']} empleados")
+        detail_row += 1
+
+        detail_items = [
+            ("Sueldo bruto", r["sueldo_bruto"]),
+            ("Base nomina IRT", r["irt"]["base_nomina"]),
+            ("Excedente IRT", r["irt"]["excedente_irt"]),
+            ("IMSS patronal", r["irt"]["imss_patronal"]["total"]),
+            ("INFONAVIT", r["irt"]["infonavit"]),
+            ("ISN", r["irt"]["isn"]),
+            ("Costo social", r["irt"]["costo_social"]),
+            ("Comision", r["irt"]["comision"]),
+            ("IVA", r["irt"]["iva"]),
+            ("Total factura (por emp)", r["irt"]["total_factura"]),
+            ("Costo actual (total grupo)", r["actual"]["costo_total"]),
+            ("Ahorro mensual", r["ahorro_mensual"]),
+        ]
+        for label, val in detail_items:
+            ws2.cell(row=detail_row, column=1, value=label)
+            ws2.cell(row=detail_row, column=2, value=round(val, 2)).number_format = '$#,##0.00'
+            detail_row += 1
+        detail_row += 1
+
+    ws2.column_dimensions["A"].width = 28
+    ws2.column_dimensions["B"].width = 18
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 with st.sidebar:
-    st.markdown("## 🏢 Datos del Cliente")
+    st.markdown("### Datos del Cliente")
     nombre_empresa = st.text_input("Nombre de la empresa", placeholder="Grupo Industrial del Norte")
-    contacto = st.text_input("Contacto", placeholder="Lic. Roberto Méndez")
-    comision_pct = st.slider("Comisión (%)", min_value=2.0, max_value=8.0, value=5.0, step=0.5)
+    contacto = st.text_input("Contacto", placeholder="Lic. Roberto Mendez")
+    comision_pct = st.slider("Comision (%)", min_value=2.0, max_value=8.0, value=5.0, step=0.5)
 
     st.markdown("---")
-    st.markdown("## 📋 Tipo de Servicio")
+
+    # Selector de estado para ISN
+    st.markdown("### Estado (ISN)")
+    estados_lista = sorted(ISN_TASAS_ESTADO.keys())
+    idx_cdmx = next((i for i, e in enumerate(estados_lista) if "Ciudad" in e), 0)
+    estado_sel = st.selectbox(
+        "Estado donde opera la empresa",
+        options=estados_lista,
+        index=idx_cdmx,
+        key="estado_isn"
+    )
+    tasa_isn = ISN_TASAS_ESTADO[estado_sel]
+    st.markdown(
+        f'<span class="estado-badge">{estado_sel} — ISN {tasa_isn*100:.2f}%</span>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("---")
+    st.markdown("### Tipo de Servicio")
     tipo_servicio = st.radio(
         "Selecciona el servicio:",
-        options=["📂 Cotizador (Subir nómina)", "Nómina completa (IRT)", "Solo excedentes", "Sociedad Civil"],
+        options=[
+            "Cotizador (Subir nomina)",
+            "Nomina completa (IRT)",
+            "Solo excedentes",
+            "Sociedad Civil",
+        ],
         index=0
     )
 
     tipo_map = {
-        "📂 Cotizador (Subir nómina)": "cotizador",
-        "Nómina completa (IRT)": "nomina",
+        "Cotizador (Subir nomina)": "cotizador",
+        "Nomina completa (IRT)": "nomina",
         "Solo excedentes": "excedentes",
         "Sociedad Civil": "sc",
     }
     tipo = tipo_map[tipo_servicio]
 
+# Set ISN for all calculations
+_set_isn(tasa_isn)
+
 
 # ============================================================
-# FUNCIÓN REUTILIZABLE: MOSTRAR RESULTADOS DE NÓMINA IRT
+# HELPER: MOSTRAR RESULTADOS DE NOMINA IRT
 # ============================================================
 def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto):
-    """Muestra métricas, proyección, gráfica, detalle y descarga Word para resultados IRT."""
+    """Muestra metricas, proyeccion, grafica, detalle y descargas Word+Excel para resultados IRT."""
     import altair as alt
 
     costo_actual_total = 0
@@ -139,75 +378,103 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         total_empleados += r["num_empleados"]
         total_administrado += r["irt"]["total_administrado"] * r["num_empleados"]
 
-    # Métricas principales
-    st.markdown("### 📊 Resultados")
-    col1, col2, col3 = st.columns(3)
+    pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
+
+    # Metricas principales
+    st.markdown('<div class="section-header"><h3>Resultados del Analisis</h3></div>', unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
         <div class="metric-card">
             <h3>Costo Actual Mensual</h3>
             <p>{fmt_moneda(costo_actual_total)}</p>
+            <p class="sub">Nomina 100%</p>
         </div>""", unsafe_allow_html=True)
     with col2:
         st.markdown(f"""
         <div class="metric-card">
-            <h3>Empleados</h3>
-            <p>{total_empleados}</p>
+            <h3>Costo IRT Propuesto</h3>
+            <p>{fmt_moneda(costo_actual_total - ahorro_total)}</p>
+            <p class="sub">Pre-IVA (acreditable)</p>
         </div>""", unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
+        <div class="metric-card">
+            <h3>Empleados</h3>
+            <p>{total_empleados}</p>
+            <p class="sub">{len(resultados_grupos)} grupo(s)</p>
+        </div>""", unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
         <div class="ahorro-verde">
-            <h3>Ahorro Mensual IRT</h3>
+            <h3>Ahorro Mensual</h3>
             <p>{fmt_moneda(ahorro_total)}</p>
+            <p class="sub">{pct_ahorro:.1f}% de ahorro</p>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("")
-    pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
 
-    # Tabla resumen — Proyección de Ahorro
-    st.markdown("#### Proyección de Ahorro")
+    # Proyeccion de Ahorro
+    st.markdown('<div class="section-header"><h3>Proyeccion de Ahorro</h3></div>', unsafe_allow_html=True)
     df_ahorro = pd.DataFrame({
-        "Período": ["Mensual", "Anual", "2 Años", "3 Años"],
-        "Ahorro IRT": [fmt_moneda(ahorro_total), fmt_moneda(ahorro_total * 12),
-                        fmt_moneda(ahorro_total * 24), fmt_moneda(ahorro_total * 36)],
+        "Periodo": ["Mensual", "Anual", "2 Anos", "3 Anos"],
+        "Ahorro IRT": [fmt_moneda(ahorro_total * m) for m in [1, 12, 24, 36]],
         "% Ahorro": [f"{pct_ahorro:.1f}%"] * 4,
     })
     st.dataframe(df_ahorro, use_container_width=True, hide_index=True)
 
-    # Gráfica comparativa
-    st.markdown("#### Comparativo de Costos")
+    # Grafica comparativa
+    st.markdown('<div class="section-header"><h3>Comparativo de Costos</h3></div>', unsafe_allow_html=True)
     chart_data = pd.DataFrame({
         "Esquema": ["Actual (100%)", "IRT Propuesto"],
         "Costo Mensual": [costo_actual_total, costo_actual_total - ahorro_total]
     })
-    chart = alt.Chart(chart_data).mark_bar().encode(
-        x=alt.X("Esquema", sort=None),
-        y="Costo Mensual",
-        color=alt.Color("Esquema", scale=alt.Scale(
+    chart = alt.Chart(chart_data).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+        x=alt.X("Esquema:N", sort=None, axis=alt.Axis(labelAngle=0)),
+        y=alt.Y("Costo Mensual:Q", axis=alt.Axis(format="$,.0f")),
+        color=alt.Color("Esquema:N", scale=alt.Scale(
             domain=["Actual (100%)", "IRT Propuesto"],
             range=["#1B3A5C", "#27AE60"]
-        ))
+        ), legend=None),
+        tooltip=[
+            alt.Tooltip("Esquema:N"),
+            alt.Tooltip("Costo Mensual:Q", format="$,.2f")
+        ]
     ).properties(height=350)
     st.altair_chart(chart, use_container_width=True)
 
     # Detalle por grupo
-    st.markdown("#### Detalle por Grupo")
+    st.markdown('<div class="section-header"><h3>Detalle por Grupo</h3></div>', unsafe_allow_html=True)
     for r in resultados_grupos:
-        with st.expander(f"📋 {r['puesto']} — {r['num_empleados']} empleados a {fmt_moneda(r['sueldo_bruto'])}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Costo actual/mes", fmt_moneda(r["actual"]["costo_total"]))
-            with col2:
-                st.metric("Ahorro IRT/mes", fmt_moneda(r["ahorro_mensual"]))
+        with st.expander(f"{r['puesto']} — {r['num_empleados']} emp. a {fmt_moneda(r['sueldo_bruto'])}"):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Costo Actual / mes</h3>
+                    <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
+                </div>""", unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Base Nomina IRT</h3>
+                    <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
+                </div>""", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"""
+                <div class="ahorro-verde">
+                    <h3>Ahorro / mes</h3>
+                    <p>{fmt_moneda(r["ahorro_mensual"])}</p>
+                </div>""", unsafe_allow_html=True)
 
-            st.write(f"**Base nómina IRT:** {fmt_moneda(r['irt']['base_nomina'])} | "
-                     f"**Excedente IRT:** {fmt_moneda(r['irt']['excedente_irt'])}")
-            st.write(f"**Neto trabajador actual:** {fmt_moneda(r['actual']['neto_trabajador'])} → "
-                     f"**IRT:** {fmt_moneda(r['irt']['neto_trabajador'])}")
+            st.write(f"**Excedente IRT:** {fmt_moneda(r['irt']['excedente_irt'])} | "
+                     f"**Neto actual:** {fmt_moneda(r['actual']['neto_trabajador'])} → "
+                     f"**Neto IRT:** {fmt_moneda(r['irt']['neto_trabajador'])}")
 
-    # === GENERAR WORD ===
+    # === DESCARGAS ===
     st.markdown("---")
-    st.markdown("### 📄 Descargar Propuesta en Word")
+    st.markdown('<div class="section-header"><h3>Descargar Propuesta</h3></div>', unsafe_allow_html=True)
 
     datos_cliente = {
         "nombre_empresa": nombre_empresa or "Cliente",
@@ -221,45 +488,65 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         "total_administrado": total_administrado,
     }
 
-    buffer = generar_propuesta_word(
+    buffer_word = generar_propuesta_word(
         datos_cliente=datos_cliente,
         tipo_servicio="nomina",
         resultados=resultados_word,
         grupos=resultados_grupos,
     )
+    buffer_excel = generar_excel_resultados(resultados_grupos, nombre_empresa, estado_sel, tasa_isn)
 
-    nombre_archivo = f"Propuesta_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
-    st.download_button(
-        label="⬇️ DESCARGAR PROPUESTA EN WORD",
-        data=buffer,
-        file_name=nombre_archivo,
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        type="primary",
-        use_container_width=True,
-    )
+    nombre_base = f"{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}"
 
+    col_w, col_e = st.columns(2)
+    with col_w:
+        st.download_button(
+            label="DESCARGAR WORD",
+            data=buffer_word,
+            file_name=f"Propuesta_{nombre_base}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary",
+            use_container_width=True,
+        )
+    with col_e:
+        st.download_button(
+            label="DESCARGAR EXCEL",
+            data=buffer_excel,
+            file_name=f"Propuesta_{nombre_base}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="secondary",
+            use_container_width=True,
+        )
 
-# === CONTENIDO PRINCIPAL ===
 
 # ============================================================
-# COTIZADOR (SUBIR NÓMINA)
+# COTIZADOR (SUBIR NOMINA)
 # ============================================================
 if tipo == "cotizador":
-    st.markdown("### 📂 Cotizador — Subir Nómina")
-    st.markdown("Sube un archivo Excel o CSV con la nómina del cliente para generar la propuesta automáticamente.")
+    st.markdown('<div class="section-header"><h3>Cotizador — Subir Nomina</h3></div>', unsafe_allow_html=True)
+    st.markdown("Sube un archivo Excel o CSV con la nomina del cliente para generar la propuesta automaticamente.")
 
-    # --- File upload ---
+    # Progress bar
+    step = 1
     archivo = st.file_uploader(
-        "Sube el archivo de nómina",
+        "Sube el archivo de nomina",
         type=["xlsx", "xls", "csv"],
         key="archivo_nomina"
     )
+    if archivo:
+        step = 2
+
+    steps_html = ""
+    step_labels = ["1. Subir archivo", "2. Mapear columnas", "3. Calcular", "4. Resultados"]
+    for i, lbl in enumerate(step_labels, 1):
+        cls = "done" if i < step else ("active" if i == step else "")
+        steps_html += f'<div class="progress-step {cls}">{lbl}</div>'
+    st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
     if archivo is not None:
         # Leer archivo
         try:
             if archivo.name.endswith(".csv"):
-                # Try utf-8 first, fallback to latin-1 for Mexican files
                 try:
                     df_raw = pd.read_csv(archivo, encoding="utf-8")
                 except UnicodeDecodeError:
@@ -290,7 +577,7 @@ if tipo == "cotizador":
         with col3:
             opciones_emp = ["(ninguna — cada fila = 1 empleado)"] + columnas_df
             if cols_detectadas["num_empleados"] and cols_detectadas["num_empleados"] in columnas_df:
-                idx_emp = columnas_df.index(cols_detectadas["num_empleados"]) + 1  # +1 for the "(ninguna)" option
+                idx_emp = columnas_df.index(cols_detectadas["num_empleados"]) + 1
             else:
                 idx_emp = 0
             col_empleados = st.selectbox("Columna de # Empleados", options=opciones_emp, index=idx_emp, key="col_emp")
@@ -322,9 +609,8 @@ if tipo == "cotizador":
             )
 
         # --- Puesto mapping ---
-        st.markdown("#### Mapeo de puestos al catálogo")
+        st.markdown("#### Mapeo de puestos al catalogo")
 
-        # Limpiar datos para mapeo
         df_trabajo = df_raw[[col_puesto, col_sueldo] + ([col_empleados] if not cada_fila_un_empleado else [])].copy()
         df_trabajo[col_sueldo] = pd.to_numeric(df_trabajo[col_sueldo], errors="coerce")
         df_trabajo = df_trabajo.dropna(subset=[col_sueldo])
@@ -334,14 +620,11 @@ if tipo == "cotizador":
 
         df_mapeo = mapear_puestos(df_trabajo[col_puesto])
 
-        # Preparar opciones del catálogo para el editor
         opciones_catalogo = sorted([p for p in PUESTOS_PROFESIONALES.keys()])
 
-        # Data editor para corregir mapeo
         df_editor = df_mapeo[["puesto_original", "puesto_catalogo", "minimo_profesional", "confianza"]].copy()
-        df_editor.columns = ["Puesto Original", "Puesto Catálogo", "Mín. Profesional", "Confianza"]
+        df_editor.columns = ["Puesto Original", "Puesto Catalogo", "Min. Profesional", "Confianza"]
 
-        # Highlight baja confianza
         baja_confianza = (df_editor["Confianza"] < 0.7).sum()
         if baja_confianza > 0:
             st.warning(f"Se encontraron **{baja_confianza}** puestos con baja confianza de mapeo. Revisa y corrige si es necesario.")
@@ -350,12 +633,12 @@ if tipo == "cotizador":
             df_editor,
             column_config={
                 "Puesto Original": st.column_config.TextColumn("Puesto Original", disabled=True),
-                "Puesto Catálogo": st.column_config.SelectboxColumn(
-                    "Puesto Catálogo",
+                "Puesto Catalogo": st.column_config.SelectboxColumn(
+                    "Puesto Catalogo",
                     options=opciones_catalogo,
                     required=True,
                 ),
-                "Mín. Profesional": st.column_config.NumberColumn("Mín. Profesional", format="$%d"),
+                "Min. Profesional": st.column_config.NumberColumn("Min. Profesional", format="$%d"),
                 "Confianza": st.column_config.ProgressColumn("Confianza", min_value=0, max_value=1, format="%.0f%%"),
             },
             use_container_width=True,
@@ -363,17 +646,16 @@ if tipo == "cotizador":
             key="editor_puestos",
         )
 
-        # Actualizar mínimos profesionales según selección del editor
         mapeo_final = {}
         for _, row in df_editado.iterrows():
-            puesto_cat = row["Puesto Catálogo"]
+            puesto_cat = row["Puesto Catalogo"]
             min_prof = PUESTOS_PROFESIONALES.get(puesto_cat, SALARIO_MINIMO_MENSUAL)
             mapeo_final[row["Puesto Original"]] = {
                 "puesto_catalogo": puesto_cat,
                 "minimo_profesional": min_prof,
             }
 
-        # --- Validación ---
+        # --- Validacion ---
         cols_val = {"puesto": col_puesto, "sueldo": col_sueldo,
                     "num_empleados": col_empleados if not cada_fila_un_empleado else None}
         warnings = validar_datos(df_raw, cols_val)
@@ -383,15 +665,13 @@ if tipo == "cotizador":
 
         # --- Calcular ---
         st.markdown("---")
-        if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True, key="calc_cotizador"):
-            with st.spinner("Calculando..."):
-                # Preparar datos: agrupar si cada fila = 1 empleado
+        if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True, key="calc_cotizador"):
+            with st.spinner("Calculando propuesta..."):
                 if cada_fila_un_empleado:
                     df_agrupado = df_trabajo.groupby([col_puesto, col_sueldo]).size().reset_index(name="num_empleados")
                 else:
                     df_agrupado = df_trabajo.rename(columns={col_empleados: "num_empleados"})
 
-                # Convertir neto a bruto si aplica
                 es_neto = tipo_sueldo == "Neto"
 
                 resultados_grupos = []
@@ -403,13 +683,11 @@ if tipo == "cotizador":
                     if n_emp <= 0:
                         continue
 
-                    # Convertir neto a bruto
                     if es_neto:
                         sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_cot)
                     else:
                         sueldo_bruto = sueldo
 
-                    # Obtener mapeo de puesto
                     info_puesto = mapeo_final.get(puesto_orig, {
                         "puesto_catalogo": "Otro (personalizado)",
                         "minimo_profesional": SALARIO_MINIMO_MENSUAL,
@@ -428,78 +706,83 @@ if tipo == "cotizador":
                 if resultados_grupos:
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
                 else:
-                    st.warning("No se encontraron datos válidos para calcular.")
+                    st.warning("No se encontraron datos validos para calcular.")
 
 
 # ============================================================
-# NÓMINA COMPLETA (IRT) — Manual
+# NOMINA COMPLETA (IRT) — Manual con base IMSS libre
 # ============================================================
 elif tipo == "nomina":
-    st.markdown("### 👥 Grupos de Empleados")
-    st.markdown("Agrega los grupos de empleados con sus puestos y sueldos actuales.")
+    st.markdown('<div class="section-header"><h3>Nomina IRT — Grupos de Empleados</h3></div>', unsafe_allow_html=True)
+    st.markdown("Agrega los grupos de empleados con sus puestos, sueldos actuales y base IMSS deseada.")
 
-    # Inicializar estado
     if "grupos" not in st.session_state:
         st.session_state.grupos = []
 
-    # Botón agregar grupo
-    with st.expander("➕ Agregar grupo de empleados", expanded=len(st.session_state.grupos) == 0):
+    with st.expander("Agregar grupo de empleados", expanded=len(st.session_state.grupos) == 0):
         col1, col2 = st.columns(2)
         with col1:
-            puesto_sel = st.selectbox("Puesto", options=LISTA_PUESTOS, key="puesto_nuevo")
+            puesto_sel = st.selectbox("Puesto (referencia)", options=LISTA_PUESTOS, key="puesto_nuevo")
             if puesto_sel == "Otro (personalizado)":
                 puesto_custom = st.text_input("Nombre del puesto", key="puesto_custom")
-                min_prof_custom = st.number_input("Salario mínimo profesional", min_value=0, value=10000, step=500, key="min_prof_custom")
-            num_empleados = st.number_input("Número de empleados", min_value=1, value=10, step=1, key="num_emp_nuevo")
+            num_empleados = st.number_input("Numero de empleados", min_value=1, value=10, step=1, key="num_emp_nuevo")
 
         with col2:
             sueldo_bruto = st.number_input("Sueldo bruto mensual ($)", min_value=1000, value=15000, step=500, key="sueldo_nuevo")
             clase_riesgo = st.selectbox("Clase de riesgo IMSS", options=["I", "II", "III", "IV", "V"], key="riesgo_nuevo")
 
-            if puesto_sel != "Otro (personalizado)":
-                min_prof = PUESTOS_PROFESIONALES.get(puesto_sel, 0)
-                st.info(f"📌 Mínimo profesional asignado: **{fmt_moneda(min_prof)}**")
-            else:
-                min_prof = min_prof_custom if puesto_sel == "Otro (personalizado)" else 0
+        # Base IMSS libre
+        if puesto_sel != "Otro (personalizado)":
+            min_prof_default = PUESTOS_PROFESIONALES.get(puesto_sel, SALARIO_MINIMO_MENSUAL)
+        else:
+            min_prof_default = SALARIO_MINIMO_MENSUAL
 
-        if st.button("✅ Agregar grupo", type="primary"):
+        st.markdown("---")
+        st.markdown(f"**Base IMSS mensual** — Minimo profesional de referencia: **{fmt_moneda(min_prof_default)}**")
+        base_imss_libre = st.number_input(
+            "Base IMSS mensual ($)",
+            min_value=float(SALARIO_MINIMO_MENSUAL),
+            value=float(min_prof_default),
+            step=500.0,
+            key="base_imss_libre",
+            help="Puedes poner cualquier monto >= salario minimo. El minimo profesional del puesto se muestra como referencia."
+        )
+
+        if st.button("Agregar grupo", type="primary", use_container_width=True):
             puesto_nombre = puesto_custom if puesto_sel == "Otro (personalizado)" else puesto_sel
-            min_p = min_prof_custom if puesto_sel == "Otro (personalizado)" else PUESTOS_PROFESIONALES.get(puesto_sel, 0)
 
             st.session_state.grupos.append({
                 "puesto": puesto_nombre,
                 "num_empleados": num_empleados,
                 "sueldo_bruto": sueldo_bruto,
                 "clase_riesgo": clase_riesgo,
-                "minimo_profesional": min_p,
+                "minimo_profesional": base_imss_libre,
             })
             st.rerun()
 
-    # Mostrar grupos capturados
     if st.session_state.grupos:
-        st.markdown("#### Grupos capturados:")
+        st.markdown('<div class="section-header"><h3>Grupos capturados</h3></div>', unsafe_allow_html=True)
         df_grupos = pd.DataFrame(st.session_state.grupos)
-        df_grupos.columns = ["Puesto", "# Empleados", "Sueldo Bruto", "Clase Riesgo", "Mín. Profesional"]
-        df_grupos["Sueldo Bruto"] = df_grupos["Sueldo Bruto"].apply(lambda x: fmt_moneda(x))
-        df_grupos["Mín. Profesional"] = df_grupos["Mín. Profesional"].apply(lambda x: fmt_moneda(x))
-        st.dataframe(df_grupos, use_container_width=True, hide_index=True)
+        df_grupos.columns = ["Puesto", "# Empleados", "Sueldo Bruto", "Clase Riesgo", "Base IMSS"]
+        df_display = df_grupos.copy()
+        df_display["Sueldo Bruto"] = df_display["Sueldo Bruto"].apply(lambda x: fmt_moneda(x))
+        df_display["Base IMSS"] = df_display["Base IMSS"].apply(lambda x: fmt_moneda(x))
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-        # Botón eliminar último grupo
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            if st.button("🗑️ Eliminar último grupo"):
+            if st.button("Eliminar ultimo grupo"):
                 st.session_state.grupos.pop()
                 st.rerun()
         with col2:
-            if st.button("🗑️ Limpiar todos"):
+            if st.button("Limpiar todos"):
                 st.session_state.grupos = []
                 st.rerun()
 
         st.markdown("---")
 
-        # === CALCULAR ===
-        if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True):
-            with st.spinner("Calculando..."):
+        if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
+            with st.spinner("Calculando propuesta..."):
                 resultados_grupos = []
                 for g in st.session_state.grupos:
                     r = calcular_grupo_nomina(
@@ -514,20 +797,20 @@ elif tipo == "nomina":
 
                 mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
     else:
-        st.info("👆 Agrega al menos un grupo de empleados para generar la propuesta.")
+        st.info("Agrega al menos un grupo de empleados para generar la propuesta.")
 
 
 # ============================================================
 # SOLO EXCEDENTES
 # ============================================================
 elif tipo == "excedentes":
-    st.markdown("### 💰 Administración de Excedentes")
-    st.markdown("Para bonos, comisiones, viáticos y otros conceptos excedentes al salario base.")
+    st.markdown('<div class="section-header"><h3>Administracion de Excedentes</h3></div>', unsafe_allow_html=True)
+    st.markdown("Para bonos, comisiones, viaticos y otros conceptos excedentes al salario base.")
 
     monto_excedente = st.number_input("Monto total de excedentes mensuales ($)",
                                        min_value=1000, value=100000, step=5000)
 
-    if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True):
+    if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
         r = calcular_excedentes(monto_excedente, comision_pct)
 
         col1, col2, col3 = st.columns(3)
@@ -536,24 +819,45 @@ elif tipo == "excedentes":
             <div class="metric-card">
                 <h3>Total Factura Mensual</h3>
                 <p>{fmt_moneda(r['total_factura'])}</p>
+                <p class="sub">Incluye IVA</p>
             </div>""", unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
             <div class="ahorro-verde">
                 <h3>Ahorro Mensual</h3>
                 <p>{fmt_moneda(r['ahorro_mensual'])}</p>
+                <p class="sub">vs nomina 100%</p>
             </div>""", unsafe_allow_html=True)
         with col3:
             st.markdown(f"""
             <div class="ahorro-verde">
                 <h3>Ahorro Anual</h3>
                 <p>{fmt_moneda(r['ahorro_anual'])}</p>
+                <p class="sub">Proyeccion 12 meses</p>
             </div>""", unsafe_allow_html=True)
 
-        st.markdown("#### Desglose")
+        # Comparativo visual
+        import altair as alt
+        st.markdown('<div class="section-header"><h3>Comparativo Excedentes vs Nomina</h3></div>', unsafe_allow_html=True)
+        chart_data = pd.DataFrame({
+            "Esquema": ["Costo Nomina Hipotetico", "Total Factura Excedentes"],
+            "Monto": [r["costo_hipotetico_nomina"], r["total_factura"]]
+        })
+        chart = alt.Chart(chart_data).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+            x=alt.X("Esquema:N", sort=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("Monto:Q", axis=alt.Axis(format="$,.0f")),
+            color=alt.Color("Esquema:N", scale=alt.Scale(
+                domain=["Costo Nomina Hipotetico", "Total Factura Excedentes"],
+                range=["#1B3A5C", "#27AE60"]
+            ), legend=None),
+            tooltip=[alt.Tooltip("Esquema:N"), alt.Tooltip("Monto:Q", format="$,.2f")]
+        ).properties(height=300)
+        st.altair_chart(chart, use_container_width=True)
+
+        st.markdown('<div class="section-header"><h3>Desglose</h3></div>', unsafe_allow_html=True)
         df = pd.DataFrame({
-            "Concepto": ["Excedente", "Comisión", "IVA", "Total factura",
-                         "Costo si pagara por nómina", "Ahorro mensual"],
+            "Concepto": ["Excedente", "Comision", "IVA", "Total factura",
+                         "Costo si pagara por nomina", "Ahorro mensual"],
             "Monto": [fmt_moneda(r["monto_excedente"]), fmt_moneda(r["comision"]),
                       fmt_moneda(r["iva"]), fmt_moneda(r["total_factura"]),
                       fmt_moneda(r["costo_hipotetico_nomina"]), fmt_moneda(r["ahorro_mensual"])]
@@ -570,7 +874,7 @@ elif tipo == "excedentes":
         buffer = generar_propuesta_word(datos_cliente, "excedentes", r)
         nombre_archivo = f"Propuesta_Excedentes_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
         st.download_button(
-            label="⬇️ DESCARGAR PROPUESTA EN WORD",
+            label="DESCARGAR PROPUESTA EN WORD",
             data=buffer,
             file_name=nombre_archivo,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -580,19 +884,33 @@ elif tipo == "excedentes":
 
 
 # ============================================================
-# SOCIEDAD CIVIL
+# SOCIEDAD CIVIL — Piramidacion como modo default
 # ============================================================
 elif tipo == "sc":
-    st.markdown("### 🏛️ Sociedad Civil — Directivos y Gerenciales")
-    st.markdown("Para perfiles que no tienen IMSS: directivos, socios, dueños.")
+    st.markdown('<div class="section-header"><h3>Sociedad Civil — Directivos y Gerenciales</h3></div>', unsafe_allow_html=True)
+    st.markdown("Para perfiles que no cotizan en IMSS: directivos, socios, duenos.")
 
     if "directivos" not in st.session_state:
         st.session_state.directivos = []
 
-    with st.expander("➕ Agregar directivo/socio", expanded=len(st.session_state.directivos) == 0):
+    with st.expander("Agregar directivo/socio", expanded=len(st.session_state.directivos) == 0):
         nombre_dir = st.text_input("Nombre o identificador", placeholder="Director General", key="nombre_dir")
-        pct_anticipo = st.radio("% Anticipo por remanente", options=[10, 20], horizontal=True, key="pct_ant")
-        piramidar = st.checkbox("¿Pirámidar? (calcular bruto desde neto deseado)", key="piram")
+
+        col_sc1, col_sc2 = st.columns(2)
+        with col_sc1:
+            st.markdown("**Retencion ISR**")
+            pct_anticipo = st.radio("% Anticipo por remanente", options=[10, 20], horizontal=True, key="pct_ant")
+        with col_sc2:
+            st.markdown("**Modo de captura**")
+            modo_sc = st.radio(
+                "Como quieres capturar?",
+                options=["Piramidar (neto → bruto)", "Ingreso bruto directo"],
+                index=0,
+                key="modo_sc",
+                horizontal=True,
+            )
+
+        piramidar = modo_sc == "Piramidar (neto → bruto)"
 
         if piramidar:
             neto_deseado = st.number_input("Neto deseado ($)", min_value=10000, value=100000, step=5000, key="neto_des")
@@ -601,7 +919,7 @@ elif tipo == "sc":
             ingreso_total = st.number_input("Ingreso total mensual ($)", min_value=10000, value=100000, step=5000, key="ing_total")
             neto_deseado = 0
 
-        if st.button("✅ Agregar directivo", type="primary"):
+        if st.button("Agregar directivo", type="primary", use_container_width=True):
             st.session_state.directivos.append({
                 "nombre": nombre_dir or f"Directivo {len(st.session_state.directivos)+1}",
                 "ingreso_total": ingreso_total,
@@ -612,20 +930,20 @@ elif tipo == "sc":
             st.rerun()
 
     if st.session_state.directivos:
-        st.markdown("#### Directivos capturados:")
+        st.markdown('<div class="section-header"><h3>Directivos capturados</h3></div>', unsafe_allow_html=True)
         for i, d in enumerate(st.session_state.directivos):
-            modo = f"Pirámidar → Neto {fmt_moneda(d['neto_deseado'])}" if d["piramidar"] else f"Ingreso {fmt_moneda(d['ingreso_total'])}"
+            modo = f"Piramidar → Neto {fmt_moneda(d['neto_deseado'])}" if d["piramidar"] else f"Ingreso {fmt_moneda(d['ingreso_total'])}"
             st.write(f"**{i+1}. {d['nombre']}** — {modo} — Anticipo {d['pct_anticipo']}%")
 
         col1, col2 = st.columns([1, 3])
         with col1:
-            if st.button("🗑️ Eliminar último"):
+            if st.button("Eliminar ultimo"):
                 st.session_state.directivos.pop()
                 st.rerun()
 
         st.markdown("---")
 
-        if st.button("🔥 CALCULAR PROPUESTA", type="primary", use_container_width=True):
+        if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
             resultados_sc = []
             for d in st.session_state.directivos:
                 r = calcular_sociedad_civil(
@@ -639,39 +957,78 @@ elif tipo == "sc":
                 resultados_sc.append(r)
 
             for r in resultados_sc:
-                st.markdown(f"#### {r['nombre']}")
+                st.markdown(f'<div class="section-header"><h3>{r["nombre"]}</h3></div>', unsafe_allow_html=True)
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Ingreso Total</h3>
                         <p>{fmt_moneda(r['ingreso_total'])}</p>
+                        <p class="sub">Bruto calculado</p>
                     </div>""", unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Neto Directivo</h3>
                         <p>{fmt_moneda(r['neto_total'])}</p>
+                        <p class="sub">Anticipo + Renta</p>
                     </div>""", unsafe_allow_html=True)
                 with col3:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Total Factura</h3>
                         <p>{fmt_moneda(r['total_factura'])}</p>
+                        <p class="sub">Con IVA</p>
                     </div>""", unsafe_allow_html=True)
                 with col4:
+                    pct_ahorro_sc = (r['ahorro_cliente_mensual'] / r['costo_nomina_100'] * 100) if r['costo_nomina_100'] > 0 else 0
                     st.markdown(f"""
                     <div class="ahorro-verde">
                         <h3>Ahorro Mensual</h3>
                         <p>{fmt_moneda(r['ahorro_cliente_mensual'])}</p>
+                        <p class="sub">{pct_ahorro_sc:.1f}% vs nomina</p>
                     </div>""", unsafe_allow_html=True)
 
                 st.markdown("")
+
+                # Comparativo visual SC vs Nomina
+                import altair as alt
+                chart_sc = pd.DataFrame({
+                    "Esquema": ["Nomina 100%", "Sociedad Civil"],
+                    "Costo": [r["costo_nomina_100"], r["ingreso_total"] + r["comision"]],
+                    "Neto": [r["neto_nomina"], r["neto_total"]],
+                })
+                c_cost = alt.Chart(chart_sc).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+                    x=alt.X("Esquema:N", sort=None, axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y("Costo:Q", axis=alt.Axis(format="$,.0f"), title="Costo Empresa (pre-IVA)"),
+                    color=alt.Color("Esquema:N", scale=alt.Scale(
+                        domain=["Nomina 100%", "Sociedad Civil"],
+                        range=["#1B3A5C", "#27AE60"]
+                    ), legend=None),
+                    tooltip=[alt.Tooltip("Esquema:N"), alt.Tooltip("Costo:Q", format="$,.2f")]
+                ).properties(height=280, title="Costo Empresa")
+
+                c_neto = alt.Chart(chart_sc).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+                    x=alt.X("Esquema:N", sort=None, axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y("Neto:Q", axis=alt.Axis(format="$,.0f"), title="Neto Directivo"),
+                    color=alt.Color("Esquema:N", scale=alt.Scale(
+                        domain=["Nomina 100%", "Sociedad Civil"],
+                        range=["#1B3A5C", "#C9A962"]
+                    ), legend=None),
+                    tooltip=[alt.Tooltip("Esquema:N"), alt.Tooltip("Neto:Q", format="$,.2f")]
+                ).properties(height=280, title="Neto Directivo")
+
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.altair_chart(c_cost, use_container_width=True)
+                with chart_col2:
+                    st.altair_chart(c_neto, use_container_width=True)
+
                 df = pd.DataFrame({
                     "Concepto": ["Anticipo por remanente", "ISR sobre anticipo",
                                  "Renta vitalicia (exenta)", "Neto al directivo",
-                                 "Comisión", "IVA", "Total factura",
-                                 "VS Nómina 100% (costo empresa)", "VS Nómina 100% (neto directivo)",
+                                 "Comision", "IVA", "Total factura",
+                                 "VS Nomina 100% (costo empresa)", "VS Nomina 100% (neto directivo)",
                                  "Ahorro mensual", "Ahorro anual"],
                     "Monto": [fmt_moneda(r["anticipo"]), fmt_moneda(r["isr_anticipo"]["isr_neto"]),
                               fmt_moneda(r["renta"]), fmt_moneda(r["neto_total"]),
@@ -692,7 +1049,7 @@ elif tipo == "sc":
             buffer = generar_propuesta_word(datos_cliente, "sc", resultados_sc)
             nombre_archivo = f"Propuesta_SC_{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}.docx"
             st.download_button(
-                label="⬇️ DESCARGAR PROPUESTA EN WORD",
+                label="DESCARGAR PROPUESTA EN WORD",
                 data=buffer,
                 file_name=nombre_archivo,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -700,13 +1057,13 @@ elif tipo == "sc":
                 use_container_width=True,
             )
     else:
-        st.info("👆 Agrega al menos un directivo/socio para generar la propuesta.")
+        st.info("Agrega al menos un directivo/socio para generar la propuesta.")
 
 # === FOOTER ===
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #888; font-size: 0.8rem;'>"
-    "Generador de Propuestas Fiscales v2.0 — Año fiscal 2026 — Uso interno exclusivo — "
-    f"{datetime.now().strftime('%Y')}</p>",
+    f'<p style="text-align: center; color: #5A6C7E; font-size: 0.8rem;">'
+    f'Sistema de Cotizacion Fiscal v3.0 — Ano fiscal 2026 — {estado_sel} (ISN {tasa_isn*100:.2f}%) — '
+    f'Uso interno exclusivo — {datetime.now().strftime("%Y")}</p>',
     unsafe_allow_html=True
 )
