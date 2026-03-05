@@ -27,141 +27,220 @@ st.set_page_config(
 # === ESTILOS CSS ===
 st.markdown("""
 <style>
+    /* --- Base: fondo blanco, tipografia limpia --- */
+    .stApp {
+        background-color: #FFFFFF !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .stApp [data-testid="stAppViewContainer"] {
+        background-color: #FFFFFF !important;
+    }
+    .stApp [data-testid="stHeader"] {
+        background-color: #FFFFFF !important;
+    }
+    .block-container {
+        background-color: #FFFFFF !important;
+    }
+    .stMarkdown p, .stMarkdown li {
+        color: #2D3748 !important;
+    }
+    h1, h2, h3, h4 {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    }
+
+    /* --- Header banner --- */
     .main-header {
-        background: linear-gradient(135deg, #0E1F33 0%, #1B3A5C 40%, #2C5F8A 100%);
-        padding: 2.5rem 2rem;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #1B3A5C 0%, #2C5F8A 100%);
+        padding: 2.2rem 2rem;
+        border-radius: 8px;
         margin-bottom: 2rem;
         text-align: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        border-bottom: 3px solid #C9A962;
+        box-shadow: 0 2px 8px rgba(27,58,92,0.15);
     }
     .main-header h1 {
-        color: #C9A962 !important;
-        font-size: 2.2rem !important;
+        color: #FFFFFF !important;
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
         margin: 0 !important;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.3px;
+    }
+    .main-header .accent {
+        color: #C9A962 !important;
     }
     .main-header p {
-        color: #D0D8E0 !important;
-        font-size: 1rem;
-        margin: 0.5rem 0 0 0;
+        color: rgba(255,255,255,0.75) !important;
+        font-size: 0.9rem;
+        font-weight: 400;
+        margin: 0.4rem 0 0 0;
     }
+
+    /* --- Section headers --- */
     .section-header {
-        background: linear-gradient(90deg, #1B3A5C 0%, transparent 100%);
-        padding: 0.8rem 1.2rem;
-        border-radius: 8px;
-        border-left: 4px solid #C9A962;
-        margin: 1.5rem 0 1rem 0;
+        background: transparent;
+        padding: 0 0 0.5rem 0;
+        border-radius: 0;
+        border-left: none;
+        border-bottom: 2px solid #E2E8F0;
+        margin: 1.8rem 0 1rem 0;
     }
     .section-header h3 {
-        color: #FFFFFF !important;
+        color: #1B3A5C !important;
         margin: 0 !important;
-        font-size: 1.1rem !important;
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.2px;
     }
+
+    /* --- Metric cards (white, clean) --- */
     .metric-card {
-        background: linear-gradient(145deg, #1B3A5C 0%, #162E4A 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
+        background: #FFFFFF;
+        padding: 1.4rem 1.2rem;
+        border-radius: 8px;
         text-align: center;
-        border-left: 4px solid #C9A962;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
         margin-bottom: 0.5rem;
     }
     .metric-card h3 {
-        color: #C9A962 !important;
-        font-size: 0.8rem !important;
+        color: #718096 !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
         margin: 0 !important;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
     }
     .metric-card p {
-        color: #FFFFFF !important;
-        font-size: 1.8rem !important;
-        font-weight: bold !important;
-        margin: 0.5rem 0 0 0 !important;
+        color: #1B3A5C !important;
+        font-size: 1.7rem !important;
+        font-weight: 700 !important;
+        margin: 0.4rem 0 0 0 !important;
     }
     .metric-card .sub {
-        color: #8BA3BE !important;
-        font-size: 0.75rem !important;
-        font-weight: normal !important;
-        margin: 0.2rem 0 0 0 !important;
+        color: #A0AEC0 !important;
+        font-size: 0.72rem !important;
+        font-weight: 400 !important;
+        margin: 0.15rem 0 0 0 !important;
     }
+
+    /* --- Ahorro cards (soft green) --- */
     .ahorro-verde {
-        background: linear-gradient(145deg, #1E8449 0%, #27AE60 50%, #2ECC71 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
+        background: #E8F5E9;
+        padding: 1.4rem 1.2rem;
+        border-radius: 8px;
         text-align: center;
-        box-shadow: 0 2px 12px rgba(39,174,96,0.3);
+        border: 1px solid #C8E6C9;
+        box-shadow: 0 1px 4px rgba(39,174,96,0.08);
         margin-bottom: 0.5rem;
     }
     .ahorro-verde h3 {
-        color: rgba(255,255,255,0.9) !important;
-        font-size: 0.8rem !important;
+        color: #2E7D32 !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
         margin: 0 !important;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
     }
     .ahorro-verde p {
-        color: #FFFFFF !important;
-        font-size: 2rem !important;
-        font-weight: bold !important;
-        margin: 0.5rem 0 0 0 !important;
+        color: #1B5E20 !important;
+        font-size: 1.7rem !important;
+        font-weight: 700 !important;
+        margin: 0.4rem 0 0 0 !important;
     }
     .ahorro-verde .sub {
-        color: rgba(255,255,255,0.8) !important;
-        font-size: 0.75rem !important;
-        font-weight: normal !important;
+        color: #4CAF50 !important;
+        font-size: 0.72rem !important;
+        font-weight: 400 !important;
     }
+
+    /* --- Estado badge --- */
     .estado-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #C9A962, #B8943F);
-        color: #0E1F33 !important;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: bold;
+        background: #F7F1E0;
+        color: #8B6914 !important;
+        padding: 0.25rem 0.7rem;
+        border-radius: 4px;
+        font-size: 0.78rem;
+        font-weight: 600;
         margin-top: 0.3rem;
+        border: 1px solid #E8D9A8;
     }
+
+    /* --- Progress bar (cotizador) --- */
     .progress-bar {
         display: flex;
         justify-content: space-between;
-        margin: 1rem 0 2rem 0;
+        margin: 0.8rem 0 1.5rem 0;
         padding: 0;
+        background: #F7FAFC;
+        border-radius: 6px;
     }
     .progress-step {
         flex: 1;
         text-align: center;
-        padding: 0.6rem 0.3rem;
-        font-size: 0.75rem;
+        padding: 0.55rem 0.3rem;
+        font-size: 0.73rem;
         font-weight: 600;
-        color: #8BA3BE;
-        border-bottom: 3px solid #2C3E50;
-        transition: all 0.3s ease;
+        color: #CBD5E0;
+        border-bottom: 3px solid #E2E8F0;
+        transition: all 0.2s ease;
     }
     .progress-step.active {
-        color: #C9A962;
+        color: #1B3A5C;
         border-bottom-color: #C9A962;
     }
     .progress-step.done {
-        color: #27AE60;
+        color: #2E7D32;
         border-bottom-color: #27AE60;
     }
+
+    /* --- Buttons --- */
     .stButton>button {
         width: 100%;
     }
+    .stButton>button[kind="primary"] {
+        background-color: #1B3A5C !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+    }
+    .stButton>button[kind="primary"]:hover {
+        background-color: #C9A962 !important;
+        color: #1B3A5C !important;
+    }
+
+    /* --- Sidebar (light gray) --- */
     div[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0E1F33 0%, #162E4A 100%);
+        background-color: #F8F9FA !important;
+        border-right: 1px solid #E2E8F0;
     }
     div[data-testid="stSidebar"] .stMarkdown p,
-    div[data-testid="stSidebar"] .stMarkdown label {
-        color: #FFFFFF;
+    div[data-testid="stSidebar"] .stMarkdown label,
+    div[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #2D3748 !important;
     }
-    .card-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
+    div[data-testid="stSidebar"] hr {
+        border-color: #E2E8F0 !important;
+    }
+
+    /* --- Dataframes / tables --- */
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        border: 1px solid #E2E8F0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    /* --- Expanders --- */
+    .streamlit-expanderHeader {
+        font-weight: 600 !important;
+        color: #1B3A5C !important;
+        background-color: #F7FAFC !important;
+        border-radius: 6px !important;
+    }
+
+    /* --- Divider lines --- */
+    hr {
+        border-color: #EDF2F7 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -169,8 +248,8 @@ st.markdown("""
 # === HEADER ===
 st.markdown("""
 <div class="main-header">
-    <h1>Sistema de Cotizacion Fiscal</h1>
-    <p>Cotizacion y generacion de propuestas para clientes — Ano fiscal 2026</p>
+    <h1>Sistema de Cotizacion <span class="accent">Fiscal</span></h1>
+    <p>Cotizacion y generacion de propuestas para clientes &mdash; Ano fiscal 2026</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1062,8 +1141,8 @@ elif tipo == "sc":
 # === FOOTER ===
 st.markdown("---")
 st.markdown(
-    f'<p style="text-align: center; color: #5A6C7E; font-size: 0.8rem;">'
-    f'Sistema de Cotizacion Fiscal v3.0 — Ano fiscal 2026 — {estado_sel} (ISN {tasa_isn*100:.2f}%) — '
-    f'Uso interno exclusivo — {datetime.now().strftime("%Y")}</p>',
+    f'<p style="text-align: center; color: #A0AEC0; font-size: 0.75rem; margin-top: 1rem;">'
+    f'Sistema de Cotizacion Fiscal v3.0 &middot; Ano fiscal 2026 &middot; {estado_sel} (ISN {tasa_isn*100:.2f}%) &middot; '
+    f'Uso interno exclusivo &middot; {datetime.now().strftime("%Y")}</p>',
     unsafe_allow_html=True
 )
