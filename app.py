@@ -737,6 +737,14 @@ if tipo == "cotizador":
             st.dataframe(df_raw.head(10).astype(str), use_container_width=True, hide_index=True)
         st.caption(f"{len(df_raw)} filas x {len(df_raw.columns)} columnas")
 
+        # --- Helper: safe column access (handles duplicate col names) ---
+        def _safe_series(df, col_name):
+            """Always return a Series, even if duplicate columns yield a DataFrame."""
+            result = df[col_name]
+            if isinstance(result, pd.DataFrame):
+                return result.iloc[:, 0]
+            return result
+
         # --- Column mapping ---
         st.markdown("#### Mapeo de columnas")
         cols_detectadas = detectar_columnas(df_raw)
@@ -751,13 +759,25 @@ if tipo == "cotizador":
             col_sueldo = st.selectbox("Columna de Sueldo", options=columnas_df, index=idx_sueldo, key="col_sueldo")
         with col3:
             opciones_emp = ["(ninguna — cada fila = 1 empleado)"] + columnas_df
-            if cols_detectadas["num_empleados"] and cols_detectadas["num_empleados"] in columnas_df:
-                idx_emp = columnas_df.index(cols_detectadas["num_empleados"]) + 1
-            else:
-                idx_emp = 0
+            idx_emp = 0  # Default: ninguna
             col_empleados = st.selectbox("Columna de # Empleados", options=opciones_emp, index=idx_emp, key="col_emp")
 
         cada_fila_un_empleado = col_empleados == "(ninguna — cada fila = 1 empleado)"
+
+        # --- Validation: columns must be different ---
+        if col_sueldo == col_puesto:
+            st.error("La columna de Sueldo y la de Puesto deben ser diferentes.")
+            st.stop()
+        if not cada_fila_un_empleado and col_empleados in (col_sueldo, col_puesto):
+            st.error("La columna de # Empleados debe ser diferente a las de Sueldo y Puesto.")
+            st.stop()
+
+        # --- Validate sueldo column is numeric ---
+        _sueldo_serie = _safe_series(df_raw, col_sueldo)
+        _num_check = pd.to_numeric(_sueldo_serie, errors="coerce")
+        _pct_numerico = _num_check.notna().sum() / max(len(_sueldo_serie.dropna()), 1)
+        if _pct_numerico < 0.3:
+            st.warning(f"La columna **{col_sueldo}** no parece contener valores numericos ({_pct_numerico:.0%} son numeros). Verifica que seleccionaste la columna correcta.")
 
         # --- Bruto / Neto ---
         st.markdown("#### Tipo de sueldo")
@@ -783,14 +803,38 @@ if tipo == "cotizador":
         # --- Puesto mapping ---
         st.markdown("#### Mapeo de puestos al catalogo")
 
-        df_trabajo = df_raw[[col_puesto, col_sueldo] + ([col_empleados] if not cada_fila_un_empleado else [])].copy()
-        df_trabajo[col_sueldo] = pd.to_numeric(df_trabajo[col_sueldo], errors="coerce")
-        df_trabajo = df_trabajo.dropna(subset=[col_sueldo])
+        try:
+            cols_trabajo = [col_puesto, col_sueldo]
+            if not cada_fila_un_empleado:
+                cols_trabajo.append(col_empleados)
+            # Verify all columns exist
+            for c in cols_trabajo:
+                if c not in df_raw.columns:
+                    st.error(f"La columna '{c}' no se encontro en el archivo.")
+                    st.stop()
 
-        if not cada_fila_un_empleado:
-            df_trabajo[col_empleados] = pd.to_numeric(df_trabajo[col_empleados], errors="coerce").fillna(1).astype(int)
+            df_trabajo = df_raw[cols_trabajo].copy()
+            df_trabajo[col_sueldo] = pd.to_numeric(_safe_series(df_trabajo, col_sueldo), errors="coerce")
+            df_trabajo = df_trabajo.dropna(subset=[col_sueldo])
 
-        df_mapeo = mapear_puestos(df_trabajo[col_puesto])
+            if not cada_fila_un_empleado:
+                df_trabajo[col_empleados] = pd.to_numeric(_safe_series(df_trabajo, col_empleados), errors="coerce").fillna(1).astype(int)
+
+            if len(df_trabajo) == 0:
+                st.error("No se encontraron filas con valores numericos validos en la columna de sueldo.")
+                st.stop()
+
+            df_mapeo = mapear_puestos(_safe_series(df_trabajo, col_puesto))
+
+            expected_cols = ["puesto_original", "puesto_catalogo", "minimo_profesional", "confianza"]
+            missing_cols = [c for c in expected_cols if c not in df_mapeo.columns]
+            if missing_cols:
+                st.error(f"Error interno en mapeo de puestos: columnas faltantes {missing_cols}")
+                st.stop()
+
+        except Exception as e:
+            st.error(f"Error al procesar las columnas: {e}")
+            st.stop()
 
         opciones_catalogo = sorted([p for p in PUESTOS_PROFESIONALES.keys()])
 

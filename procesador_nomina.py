@@ -40,9 +40,39 @@ def _score_columna(col_normalizada, keywords):
     return score
 
 
+def _es_columna_numerica(df, col, umbral=0.5):
+    """Retorna True si más del umbral de valores no-nulos son numéricos."""
+    try:
+        serie = df[col].iloc[:, 0] if isinstance(df[col], pd.DataFrame) else df[col]
+        no_nulos = serie.dropna()
+        if len(no_nulos) == 0:
+            return False
+        numericos = pd.to_numeric(no_nulos, errors="coerce").notna().sum()
+        return (numericos / len(no_nulos)) >= umbral
+    except Exception:
+        return False
+
+
+def _es_columna_texto(df, col, umbral=0.5):
+    """Retorna True si más del umbral de valores no-nulos son texto no-numérico."""
+    try:
+        serie = df[col].iloc[:, 0] if isinstance(df[col], pd.DataFrame) else df[col]
+        no_nulos = serie.dropna().astype(str).str.strip()
+        no_nulos = no_nulos[no_nulos != ""]
+        if len(no_nulos) == 0:
+            return False
+        no_num = pd.to_numeric(no_nulos, errors="coerce").isna().sum()
+        return (no_num / len(no_nulos)) >= umbral
+    except Exception:
+        return False
+
+
 def detectar_columnas(df):
     """
     Auto-detecta columnas de puesto, sueldo y num_empleados.
+    - puesto: columna de texto con keywords de puesto
+    - sueldo: columna numérica (>50% valores numéricos) con keywords de sueldo
+    - num_empleados: solo si keyword explícita (empleados, cantidad, headcount)
     Retorna dict con las columnas encontradas (nombre original).
     """
     resultado = {"puesto": None, "sueldo": None, "num_empleados": None}
@@ -51,21 +81,21 @@ def detectar_columnas(df):
     for col in df.columns:
         col_norm = _normalizar(col)
 
-        # Score para puesto
+        # Score para puesto — solo columnas de texto
         s_puesto = _score_columna(col_norm, KEYWORDS_PUESTO)
-        if s_puesto > scores["puesto"]:
+        if s_puesto > scores["puesto"] and _es_columna_texto(df, col):
             scores["puesto"] = s_puesto
             resultado["puesto"] = col
 
-        # Score para sueldo
+        # Score para sueldo — solo columnas numéricas
         s_sueldo = _score_columna(col_norm, KEYWORDS_SUELDO)
-        if s_sueldo > scores["sueldo"]:
+        if s_sueldo > scores["sueldo"] and _es_columna_numerica(df, col):
             scores["sueldo"] = s_sueldo
             resultado["sueldo"] = col
 
-        # Score para num_empleados (solo si no es la misma col que sueldo)
+        # Score para num_empleados — solo keywords explícitas y numéricas
         s_emp = _score_columna(col_norm, KEYWORDS_EMPLEADOS)
-        if s_emp > scores["num_empleados"]:
+        if s_emp > scores["num_empleados"] and _es_columna_numerica(df, col):
             scores["num_empleados"] = s_emp
             resultado["num_empleados"] = col
 
@@ -108,7 +138,10 @@ def detectar_bruto_neto(df, col_sueldo):
 
     # Heurística: si la mediana es menor que 1.5x el SM, probablemente es neto
     try:
-        valores = pd.to_numeric(df[col_sueldo], errors="coerce").dropna()
+        serie = df[col_sueldo]
+        if isinstance(serie, pd.DataFrame):
+            serie = serie.iloc[:, 0]
+        valores = pd.to_numeric(serie, errors="coerce").dropna()
         if len(valores) > 0:
             mediana = valores.median()
             if mediana < SALARIO_MINIMO_MENSUAL * 0.85:
