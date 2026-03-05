@@ -216,8 +216,10 @@ st.markdown("""
     }
     div[data-testid="stSidebar"] .stMarkdown p,
     div[data-testid="stSidebar"] .stMarkdown label,
-    div[data-testid="stSidebar"] .stMarkdown h3 {
-        color: #2D3748 !important;
+    div[data-testid="stSidebar"] .stMarkdown span,
+    div[data-testid="stSidebar"] .stMarkdown h3,
+    div[data-testid="stSidebar"] .stMarkdown li {
+        color: #333333 !important;
     }
     div[data-testid="stSidebar"] hr {
         border-color: #E2E8F0 !important;
@@ -243,21 +245,76 @@ st.markdown("""
         border-color: #EDF2F7 !important;
     }
 
-    /* --- P6: Label visibility on white background --- */
-    label, .stSelectbox label, .stTextInput label,
-    .stNumberInput label, .stSlider label, .stRadio label,
-    .stFileUploader label, .stCheckbox label,
-    .stMultiSelect label, .stTextArea label,
-    .stDateInput label, .stTimeInput label,
+    /* --- Label visibility on white background (all widgets) --- */
+    label,
+    .stSelectbox label, .stSelectbox p,
+    .stTextInput label, .stTextInput p,
+    .stNumberInput label, .stNumberInput p,
+    .stSlider label, .stSlider p,
+    .stRadio label, .stRadio p,
+    .stRadio div[role="radiogroup"] label,
+    .stRadio div[role="radiogroup"] label p,
+    .stRadio div[role="radiogroup"] label div,
+    .stRadio div[role="radiogroup"] label span,
+    .stRadio > div > label > div > p,
+    .stFileUploader label, .stFileUploader p,
+    .stCheckbox label, .stCheckbox p, .stCheckbox span,
+    .stMultiSelect label, .stMultiSelect p,
+    .stTextArea label, .stTextArea p,
+    .stDateInput label, .stDateInput p,
+    .stTimeInput label, .stTimeInput p,
     div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stWidgetLabel"] label {
+    div[data-testid="stWidgetLabel"] label,
+    div[data-testid="stWidgetLabel"] span,
+    div[data-testid="stWidgetLabel"] div,
+    div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stMarkdownContainer"] span,
+    div[data-testid="stMarkdownContainer"] li,
+    div[data-testid="stCaptionContainer"] p,
+    div[data-testid="stCaptionContainer"] span,
+    [data-testid="stForm"] label,
+    [data-testid="stForm"] p {
         color: #333333 !important;
     }
-    .stRadio > div > label > div > p {
-        color: #333333 !important;
-    }
-    .stSelectbox div[data-baseweb="select"] span {
+    /* Selectbox & multiselect: selected value text */
+    .stSelectbox div[data-baseweb="select"] span,
+    .stSelectbox div[data-baseweb="select"] div,
+    .stMultiSelect div[data-baseweb="select"] span,
+    .stMultiSelect div[data-baseweb="select"] div {
         color: #2D3748 !important;
+    }
+    /* Number input: actual value inside the input */
+    .stNumberInput input,
+    .stTextInput input,
+    .stTextArea textarea {
+        color: #2D3748 !important;
+    }
+
+    /* --- Sidebar: all labels & text dark --- */
+    div[data-testid="stSidebar"] label,
+    div[data-testid="stSidebar"] p,
+    div[data-testid="stSidebar"] span,
+    div[data-testid="stSidebar"] .stRadio label,
+    div[data-testid="stSidebar"] .stRadio p,
+    div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label,
+    div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label p,
+    div[data-testid="stSidebar"] .stSelectbox label,
+    div[data-testid="stSidebar"] .stSelectbox p,
+    div[data-testid="stSidebar"] .stNumberInput label,
+    div[data-testid="stSidebar"] .stNumberInput p,
+    div[data-testid="stSidebar"] .stTextInput label,
+    div[data-testid="stSidebar"] .stTextInput p,
+    div[data-testid="stSidebar"] .stSlider label,
+    div[data-testid="stSidebar"] .stSlider p,
+    div[data-testid="stSidebar"] .stCheckbox label,
+    div[data-testid="stSidebar"] .stCheckbox span,
+    div[data-testid="stSidebar"] .stFileUploader label,
+    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] label,
+    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span,
+    div[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] span {
+        color: #333333 !important;
     }
 
     /* --- Comparison table --- */
