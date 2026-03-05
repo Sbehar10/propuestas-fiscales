@@ -22,10 +22,12 @@ def _normalizar(texto):
 # ============================================================
 # DETECCIÓN AUTOMÁTICA DE COLUMNAS
 # ============================================================
-KEYWORDS_PUESTO = ["puesto", "cargo", "posicion", "posición", "rol", "funcion", "plaza", "categoria"]
+KEYWORDS_PUESTO = ["puesto", "cargo", "posicion", "posición", "rol", "funcion", "plaza",
+                    "categoria", "nombre", "clave", "departamento", "area"]
 KEYWORDS_SUELDO = ["sueldo", "salario", "ingreso", "pago", "remuneracion", "percepcion",
-                    "bruto", "neto", "liquido", "total", "mensual"]
-KEYWORDS_EMPLEADOS = ["empleados", "cantidad", "num", "numero", "total", "headcount",
+                    "bruto", "neto", "liquido", "mensual", "deposito", "actual", "nuevo",
+                    "total deposito", "importe", "monto"]
+KEYWORDS_EMPLEADOS = ["empleados", "cantidad", "num", "numero", "headcount",
                        "personas", "colaboradores", "trabajadores", "plazas"]
 
 

@@ -65,10 +65,21 @@ def obtener_tasa_cesantia_patronal(sbc_diario):
 
 
 # ============================================================
+# HELPER: Resolver prima de riesgo de trabajo
+# ============================================================
+def _resolver_prima_riesgo(clase_riesgo="I", prima_riesgo=None):
+    """Si prima_riesgo (numérico %) se proporciona, lo usa. Si no, busca por clase."""
+    if prima_riesgo is not None and prima_riesgo > 0:
+        return prima_riesgo  # ya es porcentaje (ej: 0.54355)
+    return PRIMA_RIESGO.get(str(clase_riesgo), PRIMA_RIESGO["I"])
+
+
+# ============================================================
 # CUOTAS IMSS PATRONALES (desglosado, solo patronal)
 # ============================================================
-def calcular_imss_patronal(salario_diario, dias=30.4, clase_riesgo="I"):
-    """Cuotas IMSS patronales desglosadas. Calcula SBC internamente."""
+def calcular_imss_patronal(salario_diario, dias=30.4, clase_riesgo="I", prima_riesgo=None):
+    """Cuotas IMSS patronales desglosadas. Calcula SBC internamente.
+    prima_riesgo: tasa numérica directa (ej: 0.54355 para clase I). Si se da, prevalece sobre clase_riesgo."""
     sbc = calcular_sbc_diario(salario_diario)
 
     cuota_fija = round(UMA_DIARIO * (IMSS_PATRONAL["cuota_fija"] / 100) * dias, 2)
@@ -77,7 +88,7 @@ def calcular_imss_patronal(salario_diario, dias=30.4, clase_riesgo="I"):
     prest_dinero = round(sbc * (IMSS_PATRONAL["prest_dinero_patronal"] / 100) * dias, 2)
     pensionados = round(sbc * (IMSS_PATRONAL["pensionados_patronal"] / 100) * dias, 2)
     invalidez = round(sbc * (IMSS_PATRONAL["invalidez_patronal"] / 100) * dias, 2)
-    prima_rt = PRIMA_RIESGO.get(str(clase_riesgo), PRIMA_RIESGO["I"])
+    prima_rt = _resolver_prima_riesgo(clase_riesgo, prima_riesgo)
     riesgo = round(sbc * (prima_rt / 100) * dias, 2)
     guarderias = round(sbc * (IMSS_PATRONAL["guarderias"] / 100) * dias, 2)
     retiro = round(sbc * (IMSS_PATRONAL["retiro"] / 100) * dias, 2)
@@ -134,11 +145,12 @@ def calcular_imss_obrero(salario_diario, dias=30.4):
 # Replica la hoja IMSS de los cotizadores Excel.
 # En IRT el patrón absorbe ambas porciones vía PPS.
 # ============================================================
-def calcular_costo_social(salario_diario, dias=30.4, clase_riesgo="I", isn_tasa=None):
+def calcular_costo_social(salario_diario, dias=30.4, clase_riesgo="I", isn_tasa=None, prima_riesgo=None):
     """
     Costo social total para el esquema IRT.
     Usa tasas combinadas (patronal + obrero) como en los cotizadores Excel,
     porque en IRT el patrón absorbe ambas porciones vía PPS.
+    prima_riesgo: tasa numérica directa (ej: 0.54355). Si se da, prevalece sobre clase_riesgo.
     """
     if isn_tasa is None:
         isn_tasa = ISN_TASA
@@ -158,7 +170,7 @@ def calcular_costo_social(salario_diario, dias=30.4, clase_riesgo="I", isn_tasa=
     tasa_pen = (IMSS_PATRONAL["pensionados_patronal"] + IMSS_OBRERO["pensionados_obrero"]) / 100
     pensionados = round(sbc * tasa_pen * dias, 2)
 
-    prima_rt = PRIMA_RIESGO.get(str(clase_riesgo), PRIMA_RIESGO["I"]) / 100
+    prima_rt = _resolver_prima_riesgo(clase_riesgo, prima_riesgo) / 100
     riesgo = round(sbc * prima_rt * dias, 2)
 
     tasa_inv = (IMSS_PATRONAL["invalidez_patronal"] + IMSS_OBRERO["invalidez_obrero"]) / 100
@@ -224,14 +236,14 @@ def calcular_prestaciones_ley(sueldo_diario):
 # ============================================================
 # ESQUEMA ACTUAL (100% NÓMINA) — para comparación
 # ============================================================
-def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1):
+def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1, prima_riesgo=None):
     """Costo total para el patrón con nómina 100% formal. IMSS sobre SBC."""
     dias = 30
     salario_diario = sueldo_bruto / dias
     sbc = calcular_sbc_diario(salario_diario)
 
     isr = calcular_isr(sueldo_bruto)
-    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo)
+    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo, prima_riesgo)
     imss_obr = calcular_imss_obrero(salario_diario, 30.4)
     infonavit = round(sbc * INFONAVIT_TASA * 30.4, 2)
     isn = round(sueldo_bruto * ISN_TASA, 2)
@@ -259,7 +271,7 @@ def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1):
 # ESQUEMA IRT — Replica cotizador Excel "Propuesta Esquema"
 # ============================================================
 def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
-                          comision_pct, num_empleados=1, dias=30, isn_tasa=None):
+                          comision_pct, num_empleados=1, dias=30, isn_tasa=None, prima_riesgo=None):
     """
     Esquema IRT (Indemnización por Riesgo de Trabajo).
 
@@ -292,11 +304,11 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
     excedente_irt = sueldo_bruto - sueldo_neto
 
     # IMSS desglosado patronal y obrero (para display en Word/app)
-    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo)
+    imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo, prima_riesgo)
     imss_obr = calcular_imss_obrero(salario_diario, 30.4)
 
     # Costo social combinado (pat+obr, como en cotizador Excel)
-    costo_social = calcular_costo_social(salario_diario, 30.4, clase_riesgo, isn_tasa)
+    costo_social = calcular_costo_social(salario_diario, 30.4, clase_riesgo, isn_tasa, prima_riesgo)
     infonavit = costo_social["infonavit"]
     isn = costo_social["isn"]
 
@@ -441,7 +453,7 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     }
 
 
-def neto_a_bruto(neto_deseado, clase_riesgo="I"):
+def neto_a_bruto(neto_deseado, clase_riesgo="I", prima_riesgo=None):
     """
     Calcula el sueldo bruto necesario para lograr un neto deseado.
     neto = bruto - ISR(bruto) - IMSS_obrero(bruto)
@@ -486,12 +498,12 @@ def _piramidar_sc(neto_deseado, pct_anticipo, comision_pct):
 # CÁLCULO RESUMEN POR GRUPO DE EMPLEADOS
 # ============================================================
 def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
-                           minimo_profesional, comision_pct):
+                           minimo_profesional, comision_pct, prima_riesgo=None):
     """Calcula el resumen completo para un grupo: Actual vs IRT"""
-    actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados)
+    actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados, prima_riesgo)
 
     irt = calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
-                                comision_pct, num_empleados)
+                                comision_pct, num_empleados, prima_riesgo=prima_riesgo)
 
     # Ahorro: costo interno actual vs subtotal factura IRT (pre-IVA, el IVA es acreditable)
     ahorro = actual["costo_total"] - (irt["subtotal_factura"] * num_empleados)

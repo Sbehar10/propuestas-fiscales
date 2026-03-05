@@ -242,6 +242,58 @@ st.markdown("""
     hr {
         border-color: #EDF2F7 !important;
     }
+
+    /* --- P6: Label visibility on white background --- */
+    label, .stSelectbox label, .stTextInput label,
+    .stNumberInput label, .stSlider label, .stRadio label,
+    .stFileUploader label, .stCheckbox label,
+    .stMultiSelect label, .stTextArea label,
+    .stDateInput label, .stTimeInput label,
+    div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stWidgetLabel"] label {
+        color: #333333 !important;
+    }
+    .stRadio > div > label > div > p {
+        color: #333333 !important;
+    }
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #2D3748 !important;
+    }
+
+    /* --- Comparison table --- */
+    .comp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+        margin: 0.8rem 0;
+    }
+    .comp-table th {
+        background: #1B3A5C;
+        color: #FFFFFF;
+        padding: 0.6rem 0.8rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .comp-table td {
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid #E2E8F0;
+        color: #2D3748;
+    }
+    .comp-table tr:nth-child(even) {
+        background: #F7FAFC;
+    }
+    .comp-table .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .comp-table .ahorro-row td {
+        background: #E8F5E9;
+        font-weight: 700;
+        color: #1B5E20;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -415,6 +467,37 @@ with st.sidebar:
     )
 
     st.markdown("---")
+
+    # Prima de riesgo de trabajo
+    st.markdown("### Prima de Riesgo")
+    modo_prima = st.radio(
+        "Selecciona la prima de riesgo:",
+        options=["Por clase (I-V)", "Numerica (%)"],
+        horizontal=True,
+        key="modo_prima",
+    )
+    if modo_prima == "Por clase (I-V)":
+        clase_riesgo_global = st.selectbox(
+            "Clase de riesgo IMSS",
+            options=["I", "II", "III", "IV", "V"],
+            key="clase_riesgo_global"
+        )
+        from constantes import PRIMA_RIESGO as _PR
+        prima_riesgo_global = _PR[clase_riesgo_global]
+        st.caption(f"Clase {clase_riesgo_global} = {prima_riesgo_global:.5f}%")
+    else:
+        prima_riesgo_global = st.number_input(
+            "Prima de riesgo (%)",
+            min_value=0.0,
+            max_value=15.0,
+            value=0.54355,
+            step=0.01,
+            format="%.5f",
+            key="prima_numerica",
+        )
+        clase_riesgo_global = "I"  # fallback label
+
+    st.markdown("---")
     st.markdown("### Tipo de Servicio")
     tipo_servicio = st.radio(
         "Selecciona el servicio:",
@@ -437,6 +520,45 @@ with st.sidebar:
 
 # Set ISN for all calculations
 _set_isn(tasa_isn)
+
+
+# ============================================================
+# HELPER: TABLA COMPARATIVA HTML
+# ============================================================
+def tabla_comparativa_irt(r):
+    """Genera tabla HTML comparativa Esquema Actual vs IRT para un grupo."""
+    act = r["actual"]
+    irt = r["irt"]
+    n = r["num_empleados"]
+
+    rows = [
+        ("Sueldo bruto mensual", act["sueldo_bruto"], irt["base_nomina"]),
+        ("ISR Art. 96", act["isr"]["isr_neto"], irt["isr"]["isr_neto"]),
+        ("IMSS patronal", act["imss_patronal"]["total"], irt["imss_patronal"]["total"]),
+        ("Infonavit", act["infonavit"], irt["infonavit"]),
+        ("ISN", act["isn"], irt["isn"]),
+        ("Prestaciones de ley", act["prestaciones"]["total_mensual"], irt["prestaciones"]["total_mensual"]),
+        ("Excedente IRT / PPS", 0, irt["excedente_irt"]),
+        ("Costo social total", 0, irt["costo_social"]),
+        ("Comision", 0, irt["comision"]),
+    ]
+    html = '<table class="comp-table"><tr><th>Concepto</th><th class="num">Esquema Actual</th><th class="num">Esquema IRT</th><th class="num">Diferencia</th></tr>'
+    for label, val_act, val_irt in rows:
+        diff = val_act - val_irt
+        html += f'<tr><td>{label}</td><td class="num">{fmt_moneda(val_act)}</td><td class="num">{fmt_moneda(val_irt)}</td><td class="num">{fmt_moneda(diff)}</td></tr>'
+
+    # Totals
+    costo_act = act["costo_por_empleado"]
+    costo_irt = irt["subtotal_factura"]
+    ahorro = costo_act - costo_irt
+    html += f'<tr class="ahorro-row"><td><strong>Costo empresa (pre-IVA) x1</strong></td><td class="num">{fmt_moneda(costo_act)}</td><td class="num">{fmt_moneda(costo_irt)}</td><td class="num">{fmt_moneda(ahorro)}</td></tr>'
+    if n > 1:
+        html += f'<tr class="ahorro-row"><td><strong>Total x{n} empleados</strong></td><td class="num">{fmt_moneda(costo_act * n)}</td><td class="num">{fmt_moneda(costo_irt * n)}</td><td class="num">{fmt_moneda(ahorro * n)}</td></tr>'
+
+    # Neto trabajador
+    html += f'<tr><td>Neto trabajador</td><td class="num">{fmt_moneda(act["neto_trabajador"])}</td><td class="num">{fmt_moneda(irt["neto_trabajador"])}</td><td class="num">{fmt_moneda(irt["neto_trabajador"] - act["neto_trabajador"])}</td></tr>'
+    html += '</table>'
+    return html
 
 
 # ============================================================
@@ -547,9 +669,8 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                     <p>{fmt_moneda(r["ahorro_mensual"])}</p>
                 </div>""", unsafe_allow_html=True)
 
-            st.write(f"**Excedente IRT:** {fmt_moneda(r['irt']['excedente_irt'])} | "
-                     f"**Neto actual:** {fmt_moneda(r['actual']['neto_trabajador'])} → "
-                     f"**Neto IRT:** {fmt_moneda(r['irt']['neto_trabajador'])}")
+            # P5: Comparison table
+            st.markdown(tabla_comparativa_irt(r), unsafe_allow_html=True)
 
     # === DESCARGAS ===
     st.markdown("---")
@@ -623,7 +744,7 @@ if tipo == "cotizador":
     st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
     if archivo is not None:
-        # Leer archivo
+        # Leer archivo — P4: multi-sheet + smart header detection
         try:
             if archivo.name.endswith(".csv"):
                 try:
@@ -632,7 +753,33 @@ if tipo == "cotizador":
                     archivo.seek(0)
                     df_raw = pd.read_csv(archivo, encoding="latin-1")
             else:
-                df_raw = pd.read_excel(archivo)
+                # Multi-sheet: let user pick sheet
+                archivo.seek(0)
+                xls = pd.ExcelFile(archivo)
+                sheet_names = xls.sheet_names
+                if len(sheet_names) > 1:
+                    sheet_sel = st.selectbox(
+                        "El archivo tiene varias hojas. Selecciona:",
+                        options=sheet_names,
+                        key="sheet_selector",
+                    )
+                else:
+                    sheet_sel = sheet_names[0]
+                df_raw = pd.read_excel(xls, sheet_name=sheet_sel, header=None)
+
+                # Smart header: find first row with >= 2 non-null text values
+                header_row = 0
+                for i in range(min(15, len(df_raw))):
+                    row_vals = df_raw.iloc[i].dropna()
+                    text_vals = [v for v in row_vals if isinstance(v, str) and len(str(v).strip()) > 1]
+                    if len(text_vals) >= 2:
+                        header_row = i
+                        break
+                if header_row > 0 or True:
+                    df_raw.columns = df_raw.iloc[header_row].astype(str)
+                    df_raw = df_raw.iloc[header_row + 1:].reset_index(drop=True)
+                # Drop fully empty rows
+                df_raw = df_raw.dropna(how="all").reset_index(drop=True)
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
             st.stop()
@@ -681,11 +828,8 @@ if tipo == "cotizador":
             if tipo_sueldo_detectado != "desconocido":
                 st.caption(f"Auto-detectado: **{tipo_sueldo_detectado}**")
         with col2:
-            clase_riesgo_cot = st.selectbox(
-                "Clase de riesgo IMSS",
-                options=["I", "II", "III", "IV", "V"],
-                key="riesgo_cotizador"
-            )
+            st.markdown(f"**Prima de riesgo:** {prima_riesgo_global:.5f}%")
+            st.caption("(Configurada en el panel lateral)")
 
         # --- Puesto mapping ---
         st.markdown("#### Mapeo de puestos al catalogo")
@@ -728,7 +872,10 @@ if tipo == "cotizador":
         mapeo_final = {}
         for _, row in df_editado.iterrows():
             puesto_cat = row["Puesto Catalogo"]
-            min_prof = PUESTOS_PROFESIONALES.get(puesto_cat, SALARIO_MINIMO_MENSUAL)
+            # Use the edited Min. Profesional value (user may have changed it)
+            min_prof = row["Min. Profesional"]
+            if pd.isna(min_prof) or min_prof <= 0:
+                min_prof = PUESTOS_PROFESIONALES.get(puesto_cat, SALARIO_MINIMO_MENSUAL)
             mapeo_final[row["Puesto Original"]] = {
                 "puesto_catalogo": puesto_cat,
                 "minimo_profesional": min_prof,
@@ -764,7 +911,7 @@ if tipo == "cotizador":
                         continue
 
                     if es_neto:
-                        sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_cot)
+                        sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_global, prima_riesgo_global)
                         conversiones_neto.append({"puesto": puesto_orig, "neto": sueldo, "bruto": sueldo_bruto, "emp": n_emp})
                     else:
                         sueldo_bruto = sueldo
@@ -778,9 +925,10 @@ if tipo == "cotizador":
                         puesto=info_puesto["puesto_catalogo"],
                         num_empleados=n_emp,
                         sueldo_bruto=sueldo_bruto,
-                        clase_riesgo=clase_riesgo_cot,
+                        clase_riesgo=clase_riesgo_global,
                         minimo_profesional=info_puesto["minimo_profesional"],
                         comision_pct=comision_pct,
+                        prima_riesgo=prima_riesgo_global,
                     )
                     resultados_grupos.append(r)
 
@@ -826,11 +974,11 @@ elif tipo == "nomina":
                 key="tipo_sueldo_manual"
             )
             sueldo_input = st.number_input("Sueldo mensual ($)", min_value=1000, value=15000, step=500, key="sueldo_nuevo")
-            clase_riesgo = st.selectbox("Clase de riesgo IMSS", options=["I", "II", "III", "IV", "V"], key="riesgo_nuevo")
+            st.markdown(f"**Prima de riesgo:** {prima_riesgo_global:.5f}%")
 
         # Show conversion preview if neto
         if tipo_sueldo_manual == "Neto":
-            bruto_preview = neto_a_bruto(sueldo_input, clase_riesgo)
+            bruto_preview = neto_a_bruto(sueldo_input, clase_riesgo_global, prima_riesgo_global)
             st.info(f"Neto capturado: **{fmt_moneda(sueldo_input)}** → Bruto estimado: **{fmt_moneda(bruto_preview)}**")
 
         # Base IMSS libre
@@ -855,7 +1003,7 @@ elif tipo == "nomina":
 
             # Convert neto to bruto if needed
             if tipo_sueldo_manual == "Neto":
-                sueldo_bruto_final = neto_a_bruto(sueldo_input, clase_riesgo)
+                sueldo_bruto_final = neto_a_bruto(sueldo_input, clase_riesgo_global, prima_riesgo_global)
             else:
                 sueldo_bruto_final = sueldo_input
 
@@ -863,8 +1011,9 @@ elif tipo == "nomina":
                 "puesto": puesto_nombre,
                 "num_empleados": num_empleados,
                 "sueldo_bruto": sueldo_bruto_final,
-                "clase_riesgo": clase_riesgo,
+                "clase_riesgo": clase_riesgo_global,
                 "minimo_profesional": base_imss_libre,
+                "prima_riesgo": prima_riesgo_global,
             })
             st.rerun()
 
@@ -897,9 +1046,10 @@ elif tipo == "nomina":
                         puesto=g["puesto"],
                         num_empleados=g["num_empleados"],
                         sueldo_bruto=g["sueldo_bruto"],
-                        clase_riesgo=g["clase_riesgo"],
+                        clase_riesgo=g.get("clase_riesgo", clase_riesgo_global),
                         minimo_profesional=g["minimo_profesional"],
                         comision_pct=comision_pct,
+                        prima_riesgo=g.get("prima_riesgo", prima_riesgo_global),
                     )
                     resultados_grupos.append(r)
 
@@ -963,15 +1113,17 @@ elif tipo == "excedentes":
         ).properties(height=300)
         st.altair_chart(chart, use_container_width=True)
 
-        st.markdown('<div class="section-header"><h3>Desglose</h3></div>', unsafe_allow_html=True)
-        df = pd.DataFrame({
-            "Concepto": ["Excedente", "Comision", "IVA", "Total factura",
-                         "Costo si pagara por nomina", "Ahorro mensual"],
-            "Monto": [fmt_moneda(r["monto_excedente"]), fmt_moneda(r["comision"]),
-                      fmt_moneda(r["iva"]), fmt_moneda(r["total_factura"]),
-                      fmt_moneda(r["costo_hipotetico_nomina"]), fmt_moneda(r["ahorro_mensual"])]
-        })
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # P5: Comparison table for Excedentes
+        st.markdown('<div class="section-header"><h3>Comparativo: Nomina vs Excedentes</h3></div>', unsafe_allow_html=True)
+        comp_html = '<table class="comp-table"><tr><th>Concepto</th><th class="num">Si pagara por Nomina</th><th class="num">Esquema Excedentes</th></tr>'
+        comp_html += f'<tr><td>Monto a dispersar</td><td class="num">{fmt_moneda(r["monto_excedente"])}</td><td class="num">{fmt_moneda(r["monto_excedente"])}</td></tr>'
+        comp_html += f'<tr><td>IMSS + ISN + Infonavit</td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"] - r["monto_excedente"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>Comision</td><td class="num">{fmt_moneda(0)}</td><td class="num">{fmt_moneda(r["comision"])}</td></tr>'
+        comp_html += f'<tr><td>IVA</td><td class="num">—</td><td class="num">{fmt_moneda(r["iva"])}</td></tr>'
+        comp_html += f'<tr class="ahorro-row"><td><strong>Costo total empresa</strong></td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"])}</td><td class="num">{fmt_moneda(r["total_factura"])}</td></tr>'
+        comp_html += f'<tr class="ahorro-row"><td><strong>Ahorro mensual</strong></td><td class="num" colspan="2" style="text-align:center">{fmt_moneda(r["ahorro_mensual"])}</td></tr>'
+        comp_html += '</table>'
+        st.markdown(comp_html, unsafe_allow_html=True)
 
         # Descargas
         st.markdown("---")
@@ -1167,20 +1319,21 @@ elif tipo == "sc":
                 with chart_col2:
                     st.altair_chart(c_neto, use_container_width=True)
 
-                df = pd.DataFrame({
-                    "Concepto": ["Anticipo por remanente", "ISR sobre anticipo",
-                                 "Renta vitalicia (exenta)", "Neto al directivo",
-                                 "Comision", "IVA", "Total factura",
-                                 "VS Nomina 100% (costo empresa)", "VS Nomina 100% (neto directivo)",
-                                 "Ahorro mensual", "Ahorro anual"],
-                    "Monto": [fmt_moneda(r["anticipo"]), fmt_moneda(r["isr_anticipo"]["isr_neto"]),
-                              fmt_moneda(r["renta"]), fmt_moneda(r["neto_total"]),
-                              fmt_moneda(r["comision"]), fmt_moneda(r["iva"]),
-                              fmt_moneda(r["total_factura"]),
-                              fmt_moneda(r["costo_nomina_100"]), fmt_moneda(r["neto_nomina"]),
-                              fmt_moneda(r["ahorro_cliente_mensual"]), fmt_moneda(r["ahorro_cliente_anual"])]
-                })
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                # P5: Comparison table SC vs Nomina
+                comp_html = '<table class="comp-table"><tr><th>Concepto</th><th class="num">Nomina 100%</th><th class="num">Sociedad Civil</th></tr>'
+                comp_html += f'<tr><td>Ingreso bruto</td><td class="num">{fmt_moneda(r["ingreso_total"])}</td><td class="num">{fmt_moneda(r["ingreso_total"])}</td></tr>'
+                comp_html += f'<tr><td>ISR retenido</td><td class="num">{fmt_moneda(r["isr_nomina"]["isr_neto"])}</td><td class="num">{fmt_moneda(r["isr_anticipo"]["isr_neto"])}</td></tr>'
+                comp_html += f'<tr><td>IMSS obrero</td><td class="num">{fmt_moneda(r["ingreso_total"] - r["neto_nomina"] - r["isr_nomina"]["isr_neto"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+                comp_html += f'<tr><td>Anticipo por remanente ({r["pct_anticipo"]}%)</td><td class="num">—</td><td class="num">{fmt_moneda(r["anticipo"])}</td></tr>'
+                comp_html += f'<tr><td>Renta vitalicia (exenta)</td><td class="num">—</td><td class="num">{fmt_moneda(r["renta"])}</td></tr>'
+                comp_html += f'<tr><td><strong>Neto directivo</strong></td><td class="num">{fmt_moneda(r["neto_nomina"])}</td><td class="num">{fmt_moneda(r["neto_total"])}</td></tr>'
+                comp_html += f'<tr><td>IMSS patronal + ISN</td><td class="num">{fmt_moneda(r["costo_nomina_100"] - r["ingreso_total"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+                comp_html += f'<tr><td>Comision SC</td><td class="num">{fmt_moneda(0)}</td><td class="num">{fmt_moneda(r["comision"])}</td></tr>'
+                comp_html += f'<tr class="ahorro-row"><td><strong>Costo empresa (pre-IVA)</strong></td><td class="num">{fmt_moneda(r["costo_nomina_100"])}</td><td class="num">{fmt_moneda(r["ingreso_total"] + r["comision"])}</td></tr>'
+                comp_html += f'<tr class="ahorro-row"><td><strong>Ahorro mensual</strong></td><td class="num" colspan="2" style="text-align:center">{fmt_moneda(r["ahorro_cliente_mensual"])}</td></tr>'
+                comp_html += f'<tr class="ahorro-row"><td><strong>Ahorro anual</strong></td><td class="num" colspan="2" style="text-align:center">{fmt_moneda(r["ahorro_cliente_anual"])}</td></tr>'
+                comp_html += '</table>'
+                st.markdown(comp_html, unsafe_allow_html=True)
                 st.markdown("---")
 
             # Descargas
