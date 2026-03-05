@@ -27,27 +27,6 @@ st.set_page_config(
 # === ESTILOS CSS ===
 st.markdown("""
 <style>
-    /* --- Base: fondo blanco, tipografia limpia --- */
-    .stApp {
-        background-color: #FFFFFF !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    .stApp [data-testid="stAppViewContainer"] {
-        background-color: #FFFFFF !important;
-    }
-    .stApp [data-testid="stHeader"] {
-        background-color: #FFFFFF !important;
-    }
-    .block-container {
-        background-color: #FFFFFF !important;
-    }
-    .stMarkdown p, .stMarkdown li {
-        color: #2D3748 !important;
-    }
-    h1, h2, h3, h4 {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-    }
-
     /* --- Header banner --- */
     .main-header {
         background: linear-gradient(135deg, #1B3A5C 0%, #2C5F8A 100%);
@@ -78,8 +57,6 @@ st.markdown("""
     .section-header {
         background: transparent;
         padding: 0 0 0.5rem 0;
-        border-radius: 0;
-        border-left: none;
         border-bottom: 2px solid #E2E8F0;
         margin: 1.8rem 0 1rem 0;
     }
@@ -91,7 +68,7 @@ st.markdown("""
         letter-spacing: 0.2px;
     }
 
-    /* --- Metric cards (white, clean) --- */
+    /* --- Metric cards --- */
     .metric-card {
         background: #FFFFFF;
         padding: 1.4rem 1.2rem;
@@ -207,114 +184,6 @@ st.markdown("""
     .stButton>button[kind="primary"]:hover {
         background-color: #C9A962 !important;
         color: #1B3A5C !important;
-    }
-
-    /* --- Sidebar (light gray) --- */
-    div[data-testid="stSidebar"] {
-        background-color: #F8F9FA !important;
-        border-right: 1px solid #E2E8F0;
-    }
-    div[data-testid="stSidebar"] .stMarkdown p,
-    div[data-testid="stSidebar"] .stMarkdown label,
-    div[data-testid="stSidebar"] .stMarkdown span,
-    div[data-testid="stSidebar"] .stMarkdown h3,
-    div[data-testid="stSidebar"] .stMarkdown li {
-        color: #333333 !important;
-    }
-    div[data-testid="stSidebar"] hr {
-        border-color: #E2E8F0 !important;
-    }
-
-    /* --- Dataframes / tables --- */
-    .stDataFrame [data-testid="stDataFrameResizable"] {
-        border: 1px solid #E2E8F0;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    /* --- Expanders --- */
-    .streamlit-expanderHeader {
-        font-weight: 600 !important;
-        color: #1B3A5C !important;
-        background-color: #F7FAFC !important;
-        border-radius: 6px !important;
-    }
-
-    /* --- Divider lines --- */
-    hr {
-        border-color: #EDF2F7 !important;
-    }
-
-    /* --- Label visibility on white background (all widgets) --- */
-    label,
-    .stSelectbox label, .stSelectbox p,
-    .stTextInput label, .stTextInput p,
-    .stNumberInput label, .stNumberInput p,
-    .stSlider label, .stSlider p,
-    .stRadio label, .stRadio p,
-    .stRadio div[role="radiogroup"] label,
-    .stRadio div[role="radiogroup"] label p,
-    .stRadio div[role="radiogroup"] label div,
-    .stRadio div[role="radiogroup"] label span,
-    .stRadio > div > label > div > p,
-    .stFileUploader label, .stFileUploader p,
-    .stCheckbox label, .stCheckbox p, .stCheckbox span,
-    .stMultiSelect label, .stMultiSelect p,
-    .stTextArea label, .stTextArea p,
-    .stDateInput label, .stDateInput p,
-    .stTimeInput label, .stTimeInput p,
-    div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stWidgetLabel"] label,
-    div[data-testid="stWidgetLabel"] span,
-    div[data-testid="stWidgetLabel"] div,
-    div[data-testid="stMarkdownContainer"] p,
-    div[data-testid="stMarkdownContainer"] span,
-    div[data-testid="stMarkdownContainer"] li,
-    div[data-testid="stCaptionContainer"] p,
-    div[data-testid="stCaptionContainer"] span,
-    [data-testid="stForm"] label,
-    [data-testid="stForm"] p {
-        color: #333333 !important;
-    }
-    /* Selectbox & multiselect: selected value text */
-    .stSelectbox div[data-baseweb="select"] span,
-    .stSelectbox div[data-baseweb="select"] div,
-    .stMultiSelect div[data-baseweb="select"] span,
-    .stMultiSelect div[data-baseweb="select"] div {
-        color: #2D3748 !important;
-    }
-    /* Number input: actual value inside the input */
-    .stNumberInput input,
-    .stTextInput input,
-    .stTextArea textarea {
-        color: #2D3748 !important;
-    }
-
-    /* --- Sidebar: all labels & text dark --- */
-    div[data-testid="stSidebar"] label,
-    div[data-testid="stSidebar"] p,
-    div[data-testid="stSidebar"] span,
-    div[data-testid="stSidebar"] .stRadio label,
-    div[data-testid="stSidebar"] .stRadio p,
-    div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label,
-    div[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label p,
-    div[data-testid="stSidebar"] .stSelectbox label,
-    div[data-testid="stSidebar"] .stSelectbox p,
-    div[data-testid="stSidebar"] .stNumberInput label,
-    div[data-testid="stSidebar"] .stNumberInput p,
-    div[data-testid="stSidebar"] .stTextInput label,
-    div[data-testid="stSidebar"] .stTextInput p,
-    div[data-testid="stSidebar"] .stSlider label,
-    div[data-testid="stSidebar"] .stSlider p,
-    div[data-testid="stSidebar"] .stCheckbox label,
-    div[data-testid="stSidebar"] .stCheckbox span,
-    div[data-testid="stSidebar"] .stFileUploader label,
-    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] label,
-    div[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span,
-    div[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
-    div[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] span {
-        color: #333333 !important;
     }
 
     /* --- Comparison table --- */
