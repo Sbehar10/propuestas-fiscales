@@ -706,12 +706,35 @@ if tipo == "cotizador":
                     df_raw = df_raw.iloc[header_row + 1:].reset_index(drop=True)
                 # Drop fully empty rows
                 df_raw = df_raw.dropna(how="all").reset_index(drop=True)
+
+                # --- Fix column names: empty/NaN and duplicates ---
+                new_cols = []
+                for i, c in enumerate(df_raw.columns):
+                    if c is None or str(c).strip() == "" or str(c) == "nan":
+                        new_cols.append(f"Col_{i+1}")
+                    else:
+                        new_cols.append(str(c).strip())
+                # Deduplicate
+                seen = {}
+                deduped = []
+                for c in new_cols:
+                    if c in seen:
+                        seen[c] += 1
+                        deduped.append(f"{c}_{seen[c]}")
+                    else:
+                        seen[c] = 0
+                        deduped.append(c)
+                df_raw.columns = deduped
+
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
             st.stop()
 
         st.markdown("#### Vista previa del archivo")
-        st.dataframe(df_raw.head(10), use_container_width=True, hide_index=True)
+        try:
+            st.dataframe(df_raw.head(10), use_container_width=True, hide_index=True)
+        except Exception:
+            st.dataframe(df_raw.head(10).astype(str), use_container_width=True, hide_index=True)
         st.caption(f"{len(df_raw)} filas x {len(df_raw.columns)} columnas")
 
         # --- Column mapping ---
