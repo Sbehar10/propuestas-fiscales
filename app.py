@@ -726,24 +726,25 @@ if tipo == "cotizador":
                 # Drop fully empty rows
                 df_raw = df_raw.dropna(how="all").reset_index(drop=True)
 
-                # --- Fix column names: empty/NaN and duplicates ---
-                new_cols = []
-                for i, c in enumerate(df_raw.columns):
-                    if c is None or str(c).strip() == "" or str(c) == "nan":
-                        new_cols.append(f"Col_{i+1}")
-                    else:
-                        new_cols.append(str(c).strip())
-                # Deduplicate
-                seen = {}
-                deduped = []
-                for c in new_cols:
-                    if c in seen:
-                        seen[c] += 1
-                        deduped.append(f"{c}_{seen[c]}")
-                    else:
-                        seen[c] = 0
-                        deduped.append(c)
-                df_raw.columns = deduped
+
+            # --- Fix column names: empty/NaN and duplicates (CSV + Excel) ---
+            new_cols = []
+            for i, c in enumerate(df_raw.columns):
+                if c is None or str(c).strip() == "" or str(c) == "nan":
+                    new_cols.append(f"Col_{i+1}")
+                else:
+                    new_cols.append(str(c).strip())
+            # Deduplicate
+            seen = {}
+            deduped = []
+            for c in new_cols:
+                if c in seen:
+                    seen[c] += 1
+                    deduped.append(f"{c}_{seen[c]}")
+                else:
+                    seen[c] = 0
+                    deduped.append(c)
+            df_raw.columns = deduped
 
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
