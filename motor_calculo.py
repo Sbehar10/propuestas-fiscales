@@ -319,7 +319,8 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
     costo_nomina = base_nomina + excedente_irt
 
     # Nómina + Cargas (base para comisión)
-    nomina_y_cargas = costo_nomina + costo_social["total"]
+    # Incluye: sueldos + IMSS + INFONAVIT + ISN + prestaciones de ley
+    nomina_y_cargas = costo_nomina + costo_social["total"] + prestaciones["total_mensual"]
 
     # Comisión sobre (nómina + cargas) — como en cotizador Excel
     comision = round(nomina_y_cargas * (comision_pct / 100), 2)
@@ -366,13 +367,16 @@ def calcular_excedentes(monto_excedente, comision_pct):
     iva = round(subtotal * IVA, 2)
     total_factura = subtotal + iva
 
-    # Costo hipotético si el cliente pagara esto por nómina
+    # Costo hipotético si el cliente pagara esto por nómina gravable
     sd_hipotetico = monto_excedente / 30
     sbc_hip = calcular_sbc_diario(sd_hipotetico)
+    isr_hipotetico = calcular_isr(monto_excedente)
     imss_pat_hipotetico = calcular_imss_patronal(sd_hipotetico, 30.4, "I")
     infonavit_hip = round(sbc_hip * INFONAVIT_TASA * 30.4, 2)
     isn_hip = round(monto_excedente * ISN_TASA, 2)
-    costo_hipotetico = monto_excedente + imss_pat_hipotetico["total"] + infonavit_hip + isn_hip
+    prestaciones_hip = calcular_prestaciones_ley(sd_hipotetico)
+    costo_hipotetico = (monto_excedente + imss_pat_hipotetico["total"]
+                        + infonavit_hip + isn_hip + prestaciones_hip["total_mensual"])
 
     # Ahorro: costo nómina hipotético vs subtotal factura (pre-IVA)
     ahorro = costo_hipotetico - subtotal
@@ -383,6 +387,11 @@ def calcular_excedentes(monto_excedente, comision_pct):
         "iva": iva,
         "total_factura": total_factura,
         "costo_hipotetico_nomina": costo_hipotetico,
+        "isr_hipotetico": isr_hipotetico["isr_neto"],
+        "imss_pat_hipotetico": imss_pat_hipotetico["total"],
+        "infonavit_hipotetico": infonavit_hip,
+        "isn_hipotetico": isn_hip,
+        "prestaciones_hipotetico": prestaciones_hip["total_mensual"],
         "ahorro_mensual": ahorro,
         "ahorro_anual": ahorro * 12,
     }
@@ -422,11 +431,13 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     sbc = calcular_sbc_diario(sd)
     isr_nomina = calcular_isr(ingreso_total)
     imss_pat = calcular_imss_patronal(sd, 30.4, "I")
-    imss_obr = calcular_imss_obrero(sd, 30.4)
     infonavit_nom = round(sbc * INFONAVIT_TASA * 30.4, 2)
     isn_nom = round(ingreso_total * ISN_TASA, 2)
-    costo_nomina_100 = ingreso_total + imss_pat["total"] + infonavit_nom + isn_nom
-    neto_nomina = ingreso_total - isr_nomina["isr_neto"] - imss_obr["total"]
+    prestaciones_nom = calcular_prestaciones_ley(sd)
+    costo_nomina_100 = (ingreso_total + imss_pat["total"] + infonavit_nom
+                        + isn_nom + prestaciones_nom["total_mensual"])
+    # Neto nómina: sin IMSS obrero porque SC no cotiza IMSS
+    neto_nomina = ingreso_total - isr_nomina["isr_neto"]
 
     # Ahorro: costo nómina 100% vs subtotal factura SC (pre-IVA, el IVA es acreditable)
     ahorro_cliente = costo_nomina_100 - subtotal

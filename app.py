@@ -669,6 +669,25 @@ if tipo == "cotizador":
         steps_html += f'<div class="progress-step {cls}">{lbl}</div>'
     st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
+    # --- Periodo de nomina (ERROR 2 fix) ---
+    st.markdown("#### Periodo de la nomina")
+    periodo_nomina = st.radio(
+        "Los sueldos del archivo son:",
+        options=["Mensual", "Quincenal", "Catorcenal", "Semanal"],
+        index=0,
+        horizontal=True,
+        key="periodo_nomina",
+    )
+    multiplicadores_periodo = {
+        "Mensual": 1.0,
+        "Quincenal": 2.0,
+        "Catorcenal": 365.0 / 14.0 / 12.0,  # 2.1726
+        "Semanal": 365.0 / 7.0 / 12.0,       # 4.3452
+    }
+    mult_periodo = multiplicadores_periodo[periodo_nomina]
+    if periodo_nomina != "Mensual":
+        st.info(f"Los sueldos se multiplicaran por **{mult_periodo:.4f}** para convertir a mensual.")
+
     if archivo is not None:
         # Leer archivo — P4: multi-sheet + smart header detection
         try:
@@ -820,6 +839,28 @@ if tipo == "cotizador":
             if not cada_fila_un_empleado:
                 df_trabajo[col_empleados] = pd.to_numeric(_safe_series(df_trabajo, col_empleados), errors="coerce").fillna(1).astype(int)
 
+            # --- ERROR 1 FIX: Filtrar filas de totales/sumas ---
+            filas_antes = len(df_trabajo)
+            # Remove rows where puesto column says TOTAL/SUMA/SUBTOTAL or is empty
+            puesto_series = _safe_series(df_trabajo, col_puesto).astype(str).str.strip().str.upper()
+            mask_total = puesto_series.isin(["TOTAL", "SUMA", "SUBTOTAL", "GRAN TOTAL", "NAN", ""])
+            # Remove rows where all text columns are empty but sueldo has a number
+            mask_empty_text = puesto_series.isin(["NAN", "", "NONE"])
+            # Remove row if its sueldo equals the sum of all other sueldos (likely a total row)
+            sueldo_vals = _safe_series(df_trabajo, col_sueldo)
+            suma_todos = sueldo_vals.sum()
+            mask_es_suma = False
+            if len(sueldo_vals) > 2:
+                for idx in sueldo_vals.index:
+                    val = sueldo_vals.loc[idx]
+                    resto = suma_todos - val
+                    if abs(val - resto) < 1.0 and val > 0:
+                        mask_total = mask_total | (sueldo_vals.index == idx)
+            df_trabajo = df_trabajo[~(mask_total | mask_empty_text)].reset_index(drop=True)
+            filas_eliminadas = filas_antes - len(df_trabajo)
+            if filas_eliminadas > 0:
+                st.info(f"Se eliminaron **{filas_eliminadas}** fila(s) de totales/sumas detectadas.")
+
             if len(df_trabajo) == 0:
                 st.error("No se encontraron filas con valores numericos validos en la columna de sueldo.")
                 st.stop()
@@ -897,15 +938,18 @@ if tipo == "cotizador":
                 conversiones_neto = []  # Track neto→bruto conversions
                 for _, fila in df_agrupado.iterrows():
                     puesto_orig = fila[col_puesto]
-                    sueldo = fila[col_sueldo]
+                    sueldo_raw = fila[col_sueldo]
                     n_emp = int(fila["num_empleados"])
 
                     if n_emp <= 0:
                         continue
 
+                    # Apply period multiplier to get monthly amount
+                    sueldo = sueldo_raw * mult_periodo
+
                     if es_neto:
                         sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_global, prima_riesgo_global)
-                        conversiones_neto.append({"puesto": puesto_orig, "neto": sueldo, "bruto": sueldo_bruto, "emp": n_emp})
+                        conversiones_neto.append({"puesto": puesto_orig, "periodo": fmt_moneda(sueldo_raw), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
                     else:
                         sueldo_bruto = sueldo
 
@@ -926,13 +970,15 @@ if tipo == "cotizador":
                     resultados_grupos.append(r)
 
                 if resultados_grupos:
+                    # Show period conversion info
+                    if periodo_nomina != "Mensual":
+                        st.markdown(f'<div class="section-header"><h3>Conversion {periodo_nomina} → Mensual (x{mult_periodo:.4f})</h3></div>', unsafe_allow_html=True)
+
                     # Show neto→bruto conversion table if applicable
                     if conversiones_neto:
                         st.markdown('<div class="section-header"><h3>Conversion Neto a Bruto</h3></div>', unsafe_allow_html=True)
                         df_conv = pd.DataFrame(conversiones_neto)
-                        df_conv.columns = ["Puesto", "Neto Original", "Bruto Estimado", "Empleados"]
-                        df_conv["Neto Original"] = df_conv["Neto Original"].apply(lambda x: fmt_moneda(x))
-                        df_conv["Bruto Estimado"] = df_conv["Bruto Estimado"].apply(lambda x: fmt_moneda(x))
+                        df_conv.columns = ["Puesto", "Sueldo Periodo", "Mensual Estimado", "Bruto Estimado", "Empleados"]
                         st.dataframe(df_conv, use_container_width=True, hide_index=True)
 
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
@@ -1012,11 +1058,15 @@ elif tipo == "nomina":
 
     if st.session_state.grupos:
         st.markdown('<div class="section-header"><h3>Grupos capturados</h3></div>', unsafe_allow_html=True)
-        df_grupos = pd.DataFrame(st.session_state.grupos)
-        df_grupos.columns = ["Puesto", "# Empleados", "Sueldo Bruto", "Clase Riesgo", "Base IMSS"]
-        df_display = df_grupos.copy()
-        df_display["Sueldo Bruto"] = df_display["Sueldo Bruto"].apply(lambda x: fmt_moneda(x))
-        df_display["Base IMSS"] = df_display["Base IMSS"].apply(lambda x: fmt_moneda(x))
+        df_display = pd.DataFrame([
+            {
+                "Puesto": g["puesto"],
+                "# Empleados": g["num_empleados"],
+                "Sueldo Bruto": fmt_moneda(g["sueldo_bruto"]),
+                "Base IMSS": fmt_moneda(g["minimo_profesional"]),
+            }
+            for g in st.session_state.grupos
+        ])
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
         col1, col2, col3 = st.columns([1, 1, 2])
@@ -1110,11 +1160,15 @@ elif tipo == "excedentes":
         st.markdown('<div class="section-header"><h3>Comparativo: Nomina vs Excedentes</h3></div>', unsafe_allow_html=True)
         comp_html = '<table class="comp-table"><tr><th>Concepto</th><th class="num">Si pagara por Nomina</th><th class="num">Esquema Excedentes</th></tr>'
         comp_html += f'<tr><td>Monto a dispersar</td><td class="num">{fmt_moneda(r["monto_excedente"])}</td><td class="num">{fmt_moneda(r["monto_excedente"])}</td></tr>'
-        comp_html += f'<tr><td>IMSS + ISN + Infonavit</td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"] - r["monto_excedente"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>ISR gravable (Art. 96)</td><td class="num">{fmt_moneda(r["isr_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>IMSS patronal</td><td class="num">{fmt_moneda(r["imss_pat_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>INFONAVIT</td><td class="num">{fmt_moneda(r["infonavit_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>ISN ({tasa_isn*100:.1f}%)</td><td class="num">{fmt_moneda(r["isn_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+        comp_html += f'<tr><td>Prestaciones de ley</td><td class="num">{fmt_moneda(r["prestaciones_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
         comp_html += f'<tr><td>Comision</td><td class="num">{fmt_moneda(0)}</td><td class="num">{fmt_moneda(r["comision"])}</td></tr>'
-        comp_html += f'<tr><td>IVA</td><td class="num">—</td><td class="num">{fmt_moneda(r["iva"])}</td></tr>'
-        comp_html += f'<tr class="ahorro-row"><td><strong>Costo total empresa</strong></td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"])}</td><td class="num">{fmt_moneda(r["total_factura"])}</td></tr>'
-        comp_html += f'<tr class="ahorro-row"><td><strong>Ahorro mensual</strong></td><td class="num" colspan="2" style="text-align:center">{fmt_moneda(r["ahorro_mensual"])}</td></tr>'
+        comp_html += f'<tr><td>IVA (acreditable)</td><td class="num">—</td><td class="num">{fmt_moneda(r["iva"])}</td></tr>'
+        comp_html += f'<tr class="ahorro-row"><td><strong>Costo total empresa</strong></td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"])}</td><td class="num">{fmt_moneda(r["monto_excedente"] + r["comision"])}</td></tr>'
+        comp_html += f'<tr class="ahorro-row"><td><strong>Ahorro mensual (pre-IVA)</strong></td><td class="num" colspan="2" style="text-align:center">{fmt_moneda(r["ahorro_mensual"])}</td></tr>'
         comp_html += '</table>'
         st.markdown(comp_html, unsafe_allow_html=True)
 
@@ -1316,7 +1370,7 @@ elif tipo == "sc":
                 comp_html = '<table class="comp-table"><tr><th>Concepto</th><th class="num">Nomina 100%</th><th class="num">Sociedad Civil</th></tr>'
                 comp_html += f'<tr><td>Ingreso bruto</td><td class="num">{fmt_moneda(r["ingreso_total"])}</td><td class="num">{fmt_moneda(r["ingreso_total"])}</td></tr>'
                 comp_html += f'<tr><td>ISR retenido</td><td class="num">{fmt_moneda(r["isr_nomina"]["isr_neto"])}</td><td class="num">{fmt_moneda(r["isr_anticipo"]["isr_neto"])}</td></tr>'
-                comp_html += f'<tr><td>IMSS obrero</td><td class="num">{fmt_moneda(r["ingreso_total"] - r["neto_nomina"] - r["isr_nomina"]["isr_neto"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
+                comp_html += f'<tr><td>IMSS obrero</td><td class="num">{fmt_moneda(0)}</td><td class="num">{fmt_moneda(0)}</td></tr>'
                 comp_html += f'<tr><td>Anticipo por remanente ({r["pct_anticipo"]}%)</td><td class="num">—</td><td class="num">{fmt_moneda(r["anticipo"])}</td></tr>'
                 comp_html += f'<tr><td>Renta vitalicia (exenta)</td><td class="num">—</td><td class="num">{fmt_moneda(r["renta"])}</td></tr>'
                 comp_html += f'<tr><td><strong>Neto directivo</strong></td><td class="num">{fmt_moneda(r["neto_nomina"])}</td><td class="num">{fmt_moneda(r["neto_total"])}</td></tr>'
@@ -1336,7 +1390,11 @@ elif tipo == "sc":
                 "contacto": contacto or "Sin especificar",
                 "comision_pct": comision_pct,
             }
-            buffer_word = generar_propuesta_word(datos_cliente, "sc", resultados_sc)
+            try:
+                buffer_word = generar_propuesta_word(datos_cliente, "sc", resultados_sc)
+            except Exception as e:
+                st.warning(f"No se pudo generar el Word: {e}")
+                buffer_word = None
 
             # Excel for SC
             buf_xl = io.BytesIO()
@@ -1362,14 +1420,15 @@ elif tipo == "sc":
             nombre_base = f"{nombre_empresa or 'Cliente'}_{datetime.now().strftime('%Y%m%d')}"
             col_w, col_e = st.columns(2)
             with col_w:
-                st.download_button(
-                    label="DESCARGAR WORD",
-                    data=buffer_word,
-                    file_name=f"Propuesta_SC_{nombre_base}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    type="primary",
-                    use_container_width=True,
-                )
+                if buffer_word:
+                    st.download_button(
+                        label="DESCARGAR WORD",
+                        data=buffer_word,
+                        file_name=f"Propuesta_SC_{nombre_base}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        type="primary",
+                        use_container_width=True,
+                    )
             with col_e:
                 st.download_button(
                     label="DESCARGAR EXCEL",
