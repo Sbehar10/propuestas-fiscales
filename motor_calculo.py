@@ -44,12 +44,12 @@ def calcular_isr(base_gravable):
 # SBC (Salario Base de Cotización)
 # ============================================================
 def calcular_sbc_diario(salario_diario):
-    """SBC diario = SD * factor de integración, topado a 25 UMA.
-    Factor 1.0493 integra aguinaldo 15d, vacaciones 12d, prima vacacional 25%.
-    Fórmula Excel: =IF(SD*1.0493 > UMA*25, UMA*25, SD*1.0493)"""
-    sbc = round(salario_diario * FACTOR_INTEGRACION, 2)
+    """SBC diario = SD topado a 25 UMA.
+    NO se aplica factor de integración porque las prestaciones de ley
+    (aguinaldo, vacaciones, prima vacacional) se calculan por separado.
+    Aplicar factor + calcular prestaciones aparte duplicaría el costo."""
     tope = UMA_DIARIO * TOPE_SBC_UMA
-    return min(sbc, tope)
+    return min(round(salario_diario, 2), tope)
 
 
 # ============================================================
@@ -238,7 +238,7 @@ def calcular_prestaciones_ley(sueldo_diario):
 # ============================================================
 def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1, prima_riesgo=None):
     """Costo total para el patrón con nómina 100% formal. IMSS sobre SBC."""
-    dias = 30
+    dias = 30.4
     salario_diario = sueldo_bruto / dias
     sbc = calcular_sbc_diario(salario_diario)
 
@@ -271,7 +271,7 @@ def calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados=1, prima_r
 # ESQUEMA IRT — Replica cotizador Excel "Propuesta Esquema"
 # ============================================================
 def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
-                          comision_pct, num_empleados=1, dias=30, isn_tasa=None, prima_riesgo=None):
+                          comision_pct, num_empleados=1, dias=30.4, isn_tasa=None, prima_riesgo=None):
     """
     Esquema IRT (Indemnización por Riesgo de Trabajo).
 
@@ -368,7 +368,7 @@ def calcular_excedentes(monto_excedente, comision_pct):
     total_factura = subtotal + iva
 
     # Costo hipotético si el cliente pagara esto por nómina gravable
-    sd_hipotetico = monto_excedente / 30
+    sd_hipotetico = monto_excedente / 30.4
     sbc_hip = calcular_sbc_diario(sd_hipotetico)
     isr_hipotetico = calcular_isr(monto_excedente)
     imss_pat_hipotetico = calcular_imss_patronal(sd_hipotetico, 30.4, "I")
@@ -427,7 +427,7 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     total_factura = subtotal + iva
 
     # Comparativo vs nómina 100%
-    sd = ingreso_total / 30
+    sd = ingreso_total / 30.4
     sbc = calcular_sbc_diario(sd)
     isr_nomina = calcular_isr(ingreso_total)
     imss_pat = calcular_imss_patronal(sd, 30.4, "I")
@@ -475,7 +475,7 @@ def neto_a_bruto(neto_deseado, clase_riesgo="I", prima_riesgo=None):
     for _ in range(100):
         mid = (low + high) / 2
         isr = calcular_isr(mid)
-        sd = mid / 30
+        sd = mid / 30.4
         imss_obr = calcular_imss_obrero(sd, 30.4)
         neto = mid - isr["isr_neto"] - imss_obr["total"]
         if abs(neto - neto_deseado) < 0.50:

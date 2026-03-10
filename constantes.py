@@ -51,7 +51,7 @@ ISN_TASAS_ESTADO = {
     "Zacatecas": 0.025,
 }
 TOPE_SBC_UMA = 25              # Tope de cotización IMSS: 25 UMA
-FACTOR_INTEGRACION = 1.0493    # Factor de integración SBC (aguinaldo 15d + vac 12d + prima vac 25%)
+FACTOR_INTEGRACION = 1.0493    # Factor de integración SBC (referencia; NO se aplica al cálculo porque prestaciones se calculan aparte)
 
 # === TABLA ISR MENSUAL ART. 96 LISR 2026 (Anexo 8 RMF 2026, DOF 28-dic-2025) ===
 TABLA_ISR_MENSUAL = [
