@@ -957,14 +957,19 @@ if tipo == "cotizador":
             key="cols_ingreso_adicional",
         )
 
-        TIPOS_COLUMNA_INGRESO = ["IMSS", "Asimilados", "PPP", "Sindicato", "Efectivo", "Otro"]
+        TIPOS_COLUMNA_INGRESO = [
+            "Nomina formal (con IMSS)",
+            "Ingreso exento adicional",
+            "Otro ingreso",
+        ]
         clasificacion_cols_adicionales = {}
         if cols_adicionales_sel:
-            st.caption("Clasifica cada columna seleccionada:")
+            st.caption("Clasifica cada columna — solo 'Nomina formal' genera cargas sociales patronales:")
             for i, col_ad in enumerate(cols_adicionales_sel):
                 clasificacion_cols_adicionales[col_ad] = st.selectbox(
                     f"Tipo: {col_ad}",
                     options=TIPOS_COLUMNA_INGRESO,
+                    index=1,
                     key=f"tipo_col_ad_{i}",
                 )
 
@@ -1100,18 +1105,38 @@ if tipo == "cotizador":
         if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True, key="calc_cotizador"):
             with st.spinner("Calculando propuesta..."):
                 # Sumar columnas adicionales de ingreso al sueldo si aplica
+                # "Nomina formal" → se suma al sueldo bruto (genera cargas patronales)
+                # "Ingreso exento" / "Otro ingreso" → se suma solo al costo (sin cargas)
                 if tiene_cols_adicionales:
+                    cols_formal = []
+                    cols_exento = []
                     for col_ad in cols_adicionales_sel:
                         if col_ad in df_raw.columns:
                             df_trabajo[f"_ing_{col_ad}"] = pd.to_numeric(
                                 _safe_series(df_raw.loc[df_trabajo.index, col_ad]),
                                 errors="coerce"
                             ).fillna(0).values
-                    ing_cols = [f"_ing_{c}" for c in cols_adicionales_sel if f"_ing_{c}" in df_trabajo.columns]
-                    if ing_cols:
-                        df_trabajo["_ingreso_adicional"] = df_trabajo[ing_cols].sum(axis=1)
-                        df_trabajo[col_sueldo] = df_trabajo[col_sueldo] + df_trabajo["_ingreso_adicional"]
-                        st.info(f"Se sumaron **{len(ing_cols)}** columna(s) adicional(es) al sueldo base para obtener el ingreso total real.")
+                            tipo_col = clasificacion_cols_adicionales.get(col_ad, "Otro ingreso")
+                            if tipo_col == "Nomina formal (con IMSS)":
+                                cols_formal.append(f"_ing_{col_ad}")
+                            else:
+                                cols_exento.append(f"_ing_{col_ad}")
+
+                    # Nomina formal: suma al sueldo bruto (motor calcula cargas sobre total)
+                    if cols_formal:
+                        df_trabajo[col_sueldo] = df_trabajo[col_sueldo] + df_trabajo[cols_formal].sum(axis=1)
+                        st.info(f"Se sumaron **{len(cols_formal)}** columna(s) de nomina formal al sueldo base.")
+
+                    # Exento/Otro: guardar para sumar al costo total despues
+                    if cols_exento:
+                        df_trabajo["_ingreso_exento"] = df_trabajo[cols_exento].sum(axis=1)
+                        st.info(f"Se detectaron **{len(cols_exento)}** columna(s) de ingreso sin cargas patronales.")
+                    else:
+                        df_trabajo["_ingreso_exento"] = 0
+
+                # Ensure _ingreso_exento column exists
+                if "_ingreso_exento" not in df_trabajo.columns:
+                    df_trabajo["_ingreso_exento"] = 0
 
                 if cada_fila_un_empleado:
                     # Agrupar por puesto catálogo mapeado (no por fila individual)
@@ -1121,10 +1146,15 @@ if tipo == "cotizador":
                     df_agrupado = df_trabajo.groupby("_puesto_cat").agg(
                         sueldo_promedio=(col_sueldo, "mean"),
                         num_empleados=(col_sueldo, "count"),
+                        exento_promedio=("_ingreso_exento", "mean"),
                     ).reset_index()
                     df_agrupado.rename(columns={"_puesto_cat": col_puesto, "sueldo_promedio": col_sueldo}, inplace=True)
                 else:
                     df_agrupado = df_trabajo.rename(columns={col_empleados: "num_empleados"})
+                    if "_ingreso_exento" in df_agrupado.columns:
+                        df_agrupado.rename(columns={"_ingreso_exento": "exento_promedio"}, inplace=True)
+                    else:
+                        df_agrupado["exento_promedio"] = 0
 
                 es_neto = tipo_sueldo == "Neto"
 
@@ -1178,6 +1208,19 @@ if tipo == "cotizador":
                     # Store neto original when applicable
                     if es_neto:
                         r["sueldo_neto_original"] = sueldo
+
+                    # Add exento income to actual cost (no cargas, just cost)
+                    exento_por_emp = fila.get("exento_promedio", 0)
+                    if exento_por_emp and exento_por_emp > 0:
+                        exento_mensual = exento_por_emp * mult_periodo
+                        r["actual"]["costo_total"] += exento_mensual * n_emp
+                        r["actual"]["costo_por_empleado"] += exento_mensual
+                        r["sueldo_bruto"] += exento_mensual
+                        r["ingreso_exento_adicional"] = exento_mensual
+                        # Recalcular ahorro
+                        r["ahorro_mensual"] = r["actual"]["costo_total"] - (r["irt"]["subtotal_factura"] * n_emp)
+                        r["ahorro_anual"] = r["ahorro_mensual"] * 12
+
                     resultados_grupos.append(r)
 
                 if resultados_grupos:
