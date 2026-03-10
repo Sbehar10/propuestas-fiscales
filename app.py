@@ -517,9 +517,16 @@ def tabla_comparativa_irt(r):
     act = r["actual"]
     irt = r["irt"]
     n = r["num_empleados"]
+    neto_orig = r.get("sueldo_neto_original")
 
-    rows = [
-        ("Sueldo bruto mensual", act["sueldo_bruto"], irt["base_nomina"]),
+    rows = []
+    if neto_orig:
+        rows.append(("Sueldo neto del empleado", neto_orig, neto_orig))
+        rows.append(("Bruto equivalente", act["sueldo_bruto"], act["sueldo_bruto"]))
+    else:
+        rows.append(("Sueldo bruto mensual", act["sueldo_bruto"], act["sueldo_bruto"]))
+    rows += [
+        ("Base nomina (IMSS)", act["sueldo_bruto"], irt["base_nomina"]),
         ("ISR Art. 96", act["isr"]["isr_neto"], irt["isr"]["isr_neto"]),
         ("IMSS patronal", act["imss_patronal"]["total"], irt["imss_patronal"]["total"]),
         ("Infonavit", act["infonavit"], irt["infonavit"]),
@@ -554,7 +561,7 @@ def tabla_comparativa_irt(r):
 # ============================================================
 # HELPER: MOSTRAR RESULTADOS DE NOMINA IRT
 # ============================================================
-def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto):
+def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto, es_neto=False):
     """Muestra metricas, proyeccion, grafica, detalle y descargas Word+Excel para resultados IRT."""
     import altair as alt
 
@@ -574,10 +581,18 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
     costo_propuesto_pre_iva = costo_actual_total - ahorro_total
     pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
 
+    # Mensaje neto cuando aplica
+    if es_neto:
+        st.success("Sus empleados siguen recibiendo el mismo neto. Lo que cambia es el costo patronal.")
+
     # Metricas principales
     st.markdown('<div class="section-header"><h3>Resultados del Analisis</h3></div>', unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
+    if es_neto:
+        col1, col2, col3, col4, col5 = st.columns(5)
+    else:
+        col1, col2, col3, col4 = st.columns(4)
+        col5 = None
     with col1:
         st.markdown(f"""
         <div class="metric-card">
@@ -606,6 +621,14 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
             <p>{fmt_moneda(ahorro_total)}</p>
             <p class="sub">{pct_ahorro:.1f}% de ahorro</p>
         </div>""", unsafe_allow_html=True)
+    if col5:
+        with col5:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>Neto Empleado</h3>
+                <p>Sin cambio</p>
+                <p class="sub">Mismo deposito</p>
+            </div>""", unsafe_allow_html=True)
 
     # IVA acreditable + nota deducibilidad
     st.markdown(f"**IVA total (acreditable):** {fmt_moneda(total_iva)} — no es costo para la empresa.")
@@ -651,26 +674,59 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
     # Detalle por grupo
     st.markdown('<div class="section-header"><h3>Detalle por Grupo</h3></div>', unsafe_allow_html=True)
     for r in resultados_grupos:
-        with st.expander(f"{r['puesto']} — {r['num_empleados']} emp. a {fmt_moneda(r['sueldo_bruto'])}"):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>Costo Actual / mes</h3>
-                    <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
-                </div>""", unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>Base Nomina IRT</h3>
-                    <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
-                </div>""", unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"""
-                <div class="ahorro-verde">
-                    <h3>Ahorro / mes</h3>
-                    <p>{fmt_moneda(r["ahorro_mensual"])}</p>
-                </div>""", unsafe_allow_html=True)
+        neto_orig = r.get("sueldo_neto_original")
+        if neto_orig:
+            label_exp = f"{r['puesto']} — {r['num_empleados']} emp. — Neto {fmt_moneda(neto_orig)} (Bruto {fmt_moneda(r['sueldo_bruto'])})"
+        else:
+            label_exp = f"{r['puesto']} — {r['num_empleados']} emp. a {fmt_moneda(r['sueldo_bruto'])}"
+        with st.expander(label_exp):
+            if neto_orig:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Neto Empleado</h3>
+                        <p>{fmt_moneda(neto_orig)}</p>
+                        <p class="sub">Sin cambio</p>
+                    </div>""", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Costo Actual / mes</h3>
+                        <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
+                    </div>""", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Base Nomina IRT</h3>
+                        <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
+                    </div>""", unsafe_allow_html=True)
+                with c4:
+                    st.markdown(f"""
+                    <div class="ahorro-verde">
+                        <h3>Ahorro / mes</h3>
+                        <p>{fmt_moneda(r["ahorro_mensual"])}</p>
+                    </div>""", unsafe_allow_html=True)
+            else:
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Costo Actual / mes</h3>
+                        <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
+                    </div>""", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>Base Nomina IRT</h3>
+                        <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
+                    </div>""", unsafe_allow_html=True)
+                with c3:
+                    st.markdown(f"""
+                    <div class="ahorro-verde">
+                        <h3>Ahorro / mes</h3>
+                        <p>{fmt_moneda(r["ahorro_mensual"])}</p>
+                    </div>""", unsafe_allow_html=True)
 
             # Per-group ahorro validation
             pct_ahorro_grupo = (r["ahorro_mensual"] / r["actual"]["costo_total"] * 100) if r["actual"]["costo_total"] > 0 else 0
@@ -696,6 +752,7 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         "costo_actual_total": costo_actual_total,
         "ahorro_total_mensual": ahorro_total,
         "total_administrado": total_administrado,
+        "es_neto": es_neto,
     }
 
     buffer_word = generar_propuesta_word(
@@ -883,6 +940,36 @@ if tipo == "cotizador":
         if _pct_numerico < 0.3:
             st.warning(f"La columna **{col_sueldo}** no parece contener valores numericos ({_pct_numerico:.0%} son numeros). Verifica que seleccionaste la columna correcta.")
 
+        # --- Columnas adicionales de ingreso (opcional) ---
+        st.markdown("#### Columnas adicionales de ingreso (opcional)")
+        st.caption("Si el archivo tiene otras columnas de pago ademas del sueldo base, seleccionalas para capturar el ingreso total real.")
+
+        # Exclude already-mapped columns from options
+        cols_excluir = {col_puesto, col_sueldo}
+        if not cada_fila_un_empleado:
+            cols_excluir.add(col_empleados)
+        cols_adicionales_opciones = [c for c in columnas_df if c not in cols_excluir]
+
+        cols_adicionales_sel = st.multiselect(
+            "Columnas adicionales de ingreso",
+            options=cols_adicionales_opciones,
+            default=[],
+            key="cols_ingreso_adicional",
+        )
+
+        TIPOS_COLUMNA_INGRESO = ["IMSS", "Asimilados", "PPP", "Sindicato", "Efectivo", "Otro"]
+        clasificacion_cols_adicionales = {}
+        if cols_adicionales_sel:
+            st.caption("Clasifica cada columna seleccionada:")
+            for i, col_ad in enumerate(cols_adicionales_sel):
+                clasificacion_cols_adicionales[col_ad] = st.selectbox(
+                    f"Tipo: {col_ad}",
+                    options=TIPOS_COLUMNA_INGRESO,
+                    key=f"tipo_col_ad_{i}",
+                )
+
+        tiene_cols_adicionales = len(cols_adicionales_sel) > 0
+
         # --- Bruto / Neto ---
         st.markdown("#### Tipo de sueldo")
         tipo_sueldo_detectado = detectar_bruto_neto(df_raw, col_sueldo)
@@ -1000,27 +1087,6 @@ if tipo == "cotizador":
                 "minimo_profesional": min_prof,
             }
 
-        # --- Columnas adicionales de costos actuales del cliente (opcional) ---
-        st.markdown("#### Costos actuales del cliente (opcional)")
-        st.caption("Si el archivo tiene columnas con los costos actuales del cliente, seleccionalas aqui.")
-
-        cols_costos_opciones = ["(ninguna)"] + columnas_df
-        col_cc1, col_cc2 = st.columns(2)
-        with col_cc1:
-            col_imss_actual = st.selectbox("Columna IMSS actual", cols_costos_opciones, key="col_imss_act")
-            col_asimilados = st.selectbox("Columna Asimilados", cols_costos_opciones, key="col_asim")
-        with col_cc2:
-            col_ppp = st.selectbox("Columna PPP/Productividad", cols_costos_opciones, key="col_ppp")
-            col_efectivo = st.selectbox("Columna Efectivo/Otro", cols_costos_opciones, key="col_efec")
-
-        cols_costo_real = {
-            "imss": col_imss_actual,
-            "asimilados": col_asimilados,
-            "ppp": col_ppp,
-            "efectivo": col_efectivo,
-        }
-        tiene_costos_reales = any(v != "(ninguna)" for v in cols_costo_real.values())
-
         # --- Validacion ---
         cols_val = {"puesto": col_puesto, "sueldo": col_sueldo,
                     "num_empleados": col_empleados if not cada_fila_un_empleado else None}
@@ -1033,6 +1099,20 @@ if tipo == "cotizador":
         st.markdown("---")
         if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True, key="calc_cotizador"):
             with st.spinner("Calculando propuesta..."):
+                # Sumar columnas adicionales de ingreso al sueldo si aplica
+                if tiene_cols_adicionales:
+                    for col_ad in cols_adicionales_sel:
+                        if col_ad in df_raw.columns:
+                            df_trabajo[f"_ing_{col_ad}"] = pd.to_numeric(
+                                _safe_series(df_raw.loc[df_trabajo.index, col_ad]),
+                                errors="coerce"
+                            ).fillna(0).values
+                    ing_cols = [f"_ing_{c}" for c in cols_adicionales_sel if f"_ing_{c}" in df_trabajo.columns]
+                    if ing_cols:
+                        df_trabajo["_ingreso_adicional"] = df_trabajo[ing_cols].sum(axis=1)
+                        df_trabajo[col_sueldo] = df_trabajo[col_sueldo] + df_trabajo["_ingreso_adicional"]
+                        st.info(f"Se sumaron **{len(ing_cols)}** columna(s) adicional(es) al sueldo base para obtener el ingreso total real.")
+
                 if cada_fila_un_empleado:
                     # Agrupar por puesto catálogo mapeado (no por fila individual)
                     df_trabajo["_puesto_cat"] = _safe_series(df_trabajo, col_puesto).map(
@@ -1043,28 +1123,8 @@ if tipo == "cotizador":
                         num_empleados=(col_sueldo, "count"),
                     ).reset_index()
                     df_agrupado.rename(columns={"_puesto_cat": col_puesto, "sueldo_promedio": col_sueldo}, inplace=True)
-
-                    # Agregar columnas de costo real si aplica
-                    if tiene_costos_reales:
-                        for ckey, ccol in cols_costo_real.items():
-                            if ccol != "(ninguna)" and ccol in df_raw.columns:
-                                df_trabajo[f"_costo_{ckey}"] = pd.to_numeric(
-                                    _safe_series(df_raw.loc[df_trabajo.index, ccol] if ccol in df_raw.columns else 0),
-                                    errors="coerce"
-                                ).fillna(0)
-                        # Sumar costos reales por puesto catálogo
-                        cost_cols = [f"_costo_{k}" for k in cols_costo_real if cols_costo_real[k] != "(ninguna)" and f"_costo_{k}" in df_trabajo.columns]
-                        if cost_cols:
-                            df_trabajo["_costo_real_total"] = df_trabajo[cost_cols].sum(axis=1)
-                            costo_real_por_grupo = df_trabajo.groupby("_puesto_cat")["_costo_real_total"].sum()
-                            sueldo_por_grupo = df_trabajo.groupby("_puesto_cat")[col_sueldo].sum()
-                        else:
-                            costo_real_por_grupo = None
-                    else:
-                        costo_real_por_grupo = None
                 else:
                     df_agrupado = df_trabajo.rename(columns={col_empleados: "num_empleados"})
-                    costo_real_por_grupo = None
 
                 es_neto = tipo_sueldo == "Neto"
 
@@ -1115,18 +1175,10 @@ if tipo == "cotizador":
                         comision_pct=comision_pct,
                         prima_riesgo=prima_riesgo_global,
                     )
+                    # Store neto original when applicable
+                    if es_neto:
+                        r["sueldo_neto_original"] = sueldo
                     resultados_grupos.append(r)
-
-                # Override actual cost with real client costs if provided
-                if tiene_costos_reales and cada_fila_un_empleado and costo_real_por_grupo is not None:
-                    for r in resultados_grupos:
-                        puesto_cat = r["puesto"]
-                        if puesto_cat in costo_real_por_grupo.index:
-                            costo_real = costo_real_por_grupo[puesto_cat] + sueldo_por_grupo[puesto_cat]
-                            r["actual"]["costo_total"] = costo_real
-                            r["ahorro_mensual"] = costo_real - (r["irt"]["subtotal_factura"] * r["num_empleados"])
-                            r["ahorro_anual"] = r["ahorro_mensual"] * 12
-                    st.info("Se usaron las columnas de costos reales del cliente para el comparativo.")
 
                 if resultados_grupos:
                     # Show period conversion info
@@ -1147,7 +1199,7 @@ if tipo == "cotizador":
                         df_ajustes.columns = ["Puesto", "Sueldo Bruto", "Min. Profesional", "Base IMSS Ajustada"]
                         st.dataframe(df_ajustes, use_container_width=True, hide_index=True)
 
-                    mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
+                    mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto, es_neto=es_neto)
                 else:
                     st.warning("No se encontraron datos validos para calcular.")
 
@@ -1236,27 +1288,36 @@ elif tipo == "nomina":
             else:
                 sueldo_bruto_final = sueldo_input
 
-            st.session_state.grupos.append({
+            grupo_data = {
                 "puesto": puesto_nombre,
                 "num_empleados": num_empleados,
                 "sueldo_bruto": sueldo_bruto_final,
                 "clase_riesgo": clase_riesgo_global,
                 "minimo_profesional": base_imss_libre,
                 "prima_riesgo": prima_riesgo_global,
-            })
+                "es_neto": tipo_sueldo_manual == "Neto",
+            }
+            if tipo_sueldo_manual == "Neto":
+                grupo_data["sueldo_neto_original"] = sueldo_input
+            st.session_state.grupos.append(grupo_data)
             st.rerun()
 
     if st.session_state.grupos:
         st.markdown('<div class="section-header"><h3>Grupos capturados</h3></div>', unsafe_allow_html=True)
-        df_display = pd.DataFrame([
-            {
+        rows_display = []
+        for g in st.session_state.grupos:
+            row_d = {
                 "Puesto": g["puesto"],
                 "# Empleados": g["num_empleados"],
-                "Sueldo Bruto": fmt_moneda(g["sueldo_bruto"]),
                 "Base IMSS": fmt_moneda(g["minimo_profesional"]),
             }
-            for g in st.session_state.grupos
-        ])
+            if g.get("es_neto"):
+                row_d["Sueldo Neto"] = fmt_moneda(g["sueldo_neto_original"])
+                row_d["Bruto Equiv."] = fmt_moneda(g["sueldo_bruto"])
+            else:
+                row_d["Sueldo Bruto"] = fmt_moneda(g["sueldo_bruto"])
+            rows_display.append(row_d)
+        df_display = pd.DataFrame(rows_display)
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
         col1, col2, col3 = st.columns([1, 1, 2])
@@ -1274,6 +1335,7 @@ elif tipo == "nomina":
         if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
             with st.spinner("Calculando propuesta..."):
                 resultados_grupos = []
+                any_neto = False
                 for g in st.session_state.grupos:
                     r = calcular_grupo_nomina(
                         puesto=g["puesto"],
@@ -1284,9 +1346,12 @@ elif tipo == "nomina":
                         comision_pct=comision_pct,
                         prima_riesgo=g.get("prima_riesgo", prima_riesgo_global),
                     )
+                    if g.get("es_neto"):
+                        r["sueldo_neto_original"] = g["sueldo_neto_original"]
+                        any_neto = True
                     resultados_grupos.append(r)
 
-                mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
+                mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto, es_neto=any_neto)
     else:
         st.info("Agrega al menos un grupo de empleados para generar la propuesta.")
 

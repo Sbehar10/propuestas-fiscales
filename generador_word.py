@@ -238,12 +238,22 @@ def _generar_resumen_ejecutivo(doc, datos_cliente, tipo_servicio, resultados):
     if tipo_servicio == "nomina":
         total_empleados = resultados.get("total_empleados", 0)
         ahorro_mensual = resultados.get("ahorro_total_mensual", 0)
+        es_neto = resultados.get("es_neto", False)
 
         doc.add_paragraph(
             f"La presente propuesta contempla la administración de nómina para "
             f"{total_empleados} colaboradores mediante un esquema de servicios especializados "
             f"con REPSE vigente, optimizando la carga fiscal y patronal de su empresa."
         )
+
+        if es_neto:
+            p = doc.add_paragraph()
+            run = p.add_run(
+                "Sus empleados siguen recibiendo el mismo neto. "
+                "Lo que cambia es el costo patronal."
+            )
+            run.bold = True
+            run.font.color.rgb = VERDE
 
         # Tabla resumen de ahorro
         headers = ["Concepto", "IRT Propuesto"]
@@ -365,6 +375,7 @@ def _generar_seccion_propuesta_irt(doc, grupos):
     )
 
     for g in grupos:
+        neto_orig = g.get("sueldo_neto_original")
         h2 = doc.add_heading(f"{g['puesto']} ({g['num_empleados']} empleados)", level=2)
         for run in h2.runs:
             run.font.color.rgb = AZUL_OSCURO
@@ -373,8 +384,13 @@ def _generar_seccion_propuesta_irt(doc, grupos):
         a = g["actual"]
         irt = g["irt"]
 
-        rows = [
-            ["Sueldo bruto", fmt_moneda(a["sueldo_bruto"]), fmt_moneda(a["sueldo_bruto"])],
+        rows = []
+        if neto_orig:
+            rows.append(["Sueldo neto del empleado", fmt_moneda(neto_orig), fmt_moneda(neto_orig) + " (sin cambio)"])
+            rows.append(["Bruto equivalente", fmt_moneda(a["sueldo_bruto"]), fmt_moneda(a["sueldo_bruto"])])
+        else:
+            rows.append(["Sueldo bruto", fmt_moneda(a["sueldo_bruto"]), fmt_moneda(a["sueldo_bruto"])])
+        rows += [
             ["Base nómina (IMSS)", fmt_moneda(a["sueldo_bruto"]), fmt_moneda(irt["base_nomina"])],
             ["Excedente IRT (exento)", "—", fmt_moneda(irt["excedente_irt"])],
             ["ISR mensual", fmt_moneda(a["isr"]["isr_neto"]), fmt_moneda(irt["isr"]["isr_neto"])],
