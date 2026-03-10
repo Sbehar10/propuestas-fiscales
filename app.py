@@ -1121,14 +1121,19 @@ if tipo == "cotizador":
                 # Sumar columnas adicionales de ingreso al sueldo si aplica
                 # "Nomina formal" → se suma al sueldo bruto (genera cargas patronales)
                 # "Ingreso exento" / "Otro ingreso" → se suma solo al costo (sin cargas)
-                if tiene_cols_adicionales:
-                    cols_formal = []
-                    cols_exento = []
-                    for col_ad in cols_adicionales_sel:
-                        if col_ad in df_raw.columns:
+                if tiene_cols_adicionales and cols_adicionales_sel:
+                    try:
+                        cols_formal = []
+                        cols_exento = []
+                        for col_ad in cols_adicionales_sel:
+                            if col_ad not in df_raw.columns:
+                                continue
+                            # Extract values aligned to df_trabajo index
+                            raw_vals = df_raw.loc[df_trabajo.index, col_ad]
+                            if isinstance(raw_vals, pd.DataFrame):
+                                raw_vals = raw_vals.iloc[:, 0]
                             df_trabajo[f"_ing_{col_ad}"] = pd.to_numeric(
-                                _safe_series(df_raw.loc[df_trabajo.index, col_ad]),
-                                errors="coerce"
+                                raw_vals, errors="coerce"
                             ).fillna(0).values
                             tipo_col = clasificacion_cols_adicionales.get(col_ad, "Otro ingreso")
                             if tipo_col == "Nomina formal (con IMSS)":
@@ -1136,16 +1141,19 @@ if tipo == "cotizador":
                             else:
                                 cols_exento.append(f"_ing_{col_ad}")
 
-                    # Nomina formal: suma al sueldo bruto (motor calcula cargas sobre total)
-                    if cols_formal:
-                        df_trabajo[col_sueldo] = df_trabajo[col_sueldo] + df_trabajo[cols_formal].sum(axis=1)
-                        st.info(f"Se sumaron **{len(cols_formal)}** columna(s) de nomina formal al sueldo base.")
+                        # Nomina formal: suma al sueldo bruto (motor calcula cargas sobre total)
+                        if cols_formal:
+                            df_trabajo[col_sueldo] = df_trabajo[col_sueldo] + df_trabajo[cols_formal].sum(axis=1)
+                            st.info(f"Se sumaron **{len(cols_formal)}** columna(s) de nomina formal al sueldo base.")
 
-                    # Exento/Otro: guardar para sumar al costo total despues
-                    if cols_exento:
-                        df_trabajo["_ingreso_exento"] = df_trabajo[cols_exento].sum(axis=1)
-                        st.info(f"Se detectaron **{len(cols_exento)}** columna(s) de ingreso sin cargas patronales.")
-                    else:
+                        # Exento/Otro: guardar para sumar al costo total despues
+                        if cols_exento:
+                            df_trabajo["_ingreso_exento"] = df_trabajo[cols_exento].sum(axis=1)
+                            st.info(f"Se detectaron **{len(cols_exento)}** columna(s) de ingreso sin cargas patronales.")
+                        else:
+                            df_trabajo["_ingreso_exento"] = 0
+                    except Exception as e:
+                        st.warning(f"No se pudieron procesar las columnas adicionales de ingreso: {e}")
                         df_trabajo["_ingreso_exento"] = 0
 
                 # Ensure _ingreso_exento column exists
