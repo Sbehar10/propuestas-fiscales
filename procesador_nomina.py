@@ -27,8 +27,8 @@ KEYWORDS_PUESTO = ["puesto", "cargo", "posicion", "posición", "rol", "funcion",
 KEYWORDS_SUELDO = ["sueldo", "salario", "ingreso", "pago", "remuneracion", "percepcion",
                     "bruto", "neto", "liquido", "mensual", "deposito", "actual", "nuevo",
                     "total deposito", "importe", "monto"]
-KEYWORDS_EMPLEADOS = ["empleados", "cantidad", "num", "numero", "headcount",
-                       "personas", "colaboradores", "trabajadores", "plazas"]
+KEYWORDS_EMPLEADOS = ["cantidad", "headcount", "num_empleados", "# empleados",
+                       "numero de empleados", "qty"]
 
 
 def _score_columna(col_normalizada, keywords):

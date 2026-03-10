@@ -925,6 +925,20 @@ if tipo == "cotizador":
 
         cada_fila_un_empleado = col_empleados == "(ninguna — cada fila = 1 empleado)"
 
+        # --- Validate # Empleados column ---
+        if not cada_fila_un_empleado:
+            _emp_serie = pd.to_numeric(_safe_series(df_raw, col_empleados), errors="coerce").dropna()
+            if len(_emp_serie) > 2:
+                # Check if all values are 1
+                if (_emp_serie == 1).all():
+                    st.warning(f"La columna **{col_empleados}** tiene valor 1 en todas las filas. Probablemente cada fila ya es 1 empleado. Considera usar '(ninguna)'.")
+                else:
+                    # Check if it's a consecutive sequence (1,2,3,4...)
+                    _sorted = _emp_serie.sort_index().reset_index(drop=True)
+                    _expected = pd.Series(range(1, len(_sorted) + 1), dtype=float)
+                    if (_sorted.values == _expected.values).all() or (_sorted.diff().dropna() == 1).all():
+                        st.warning(f"La columna **{col_empleados}** parece ser un consecutivo (1, 2, 3...), no cantidad de empleados. Estas seguro?")
+
         # --- Validation: columns must be different ---
         if col_sueldo == col_puesto:
             st.error("La columna de Sueldo y la de Puesto deben ser diferentes.")
