@@ -307,10 +307,14 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
     imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo, prima_riesgo)
     imss_obr = calcular_imss_obrero(salario_diario, 30.4)
 
-    # Costo social combinado (pat+obr, como en cotizador Excel)
+    # Costo social combinado (pat+obr, para display desglosado)
     costo_social = calcular_costo_social(salario_diario, 30.4, clase_riesgo, isn_tasa, prima_riesgo)
-    infonavit = costo_social["infonavit"]
-    isn = costo_social["isn"]
+
+    # INFONAVIT y ISN solo patronal (NO combinado)
+    sbc = calcular_sbc_diario(salario_diario)
+    infonavit = round(sbc * INFONAVIT_TASA * 30.4, 2)
+    _isn_tasa = isn_tasa if isn_tasa is not None else ISN_TASA
+    isn = round(base_nomina * _isn_tasa, 2)
 
     # Prestaciones de ley
     prestaciones = calcular_prestaciones_ley(salario_diario)
@@ -318,13 +322,13 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
     # Costo nómina = sueldo + PPS = depósito + ISR_neto
     costo_nomina = base_nomina + excedente_irt
 
-    # Nómina + Cargas (base para comisión)
-    # Incluye: sueldos + IMSS + INFONAVIT + ISN + prestaciones de ley
-    nomina_y_cargas = costo_nomina + costo_social["total"] + prestaciones["total_mensual"]
+    # Total administrado = sueldos + IMSS patronal + INFONAVIT + ISN
+    # NO incluye obrero (no es costo del patrón) NI prestaciones (se ahorran)
+    total_administrado = costo_nomina + imss_pat["total"] + infonavit + isn
 
-    # Comisión sobre (nómina + cargas) — como en cotizador Excel
-    comision = round(nomina_y_cargas * (comision_pct / 100), 2)
-    subtotal_factura = nomina_y_cargas + comision
+    # Comisión sobre total administrado
+    comision = round(total_administrado * (comision_pct / 100), 2)
+    subtotal_factura = total_administrado + comision
     iva = round(subtotal_factura * IVA, 2)
     total_factura = subtotal_factura + iva
 
@@ -337,12 +341,13 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
         "isr": isr,
         "imss_patronal": imss_pat,
         "imss_obrero": imss_obr,
+        "imss_patronal_total": imss_pat["total"],
         "infonavit": infonavit,
         "isn": isn,
         "prestaciones": prestaciones,
         "costo_nomina": costo_nomina,
         "costo_social": costo_social["total"],
-        "total_administrado": nomina_y_cargas,
+        "total_administrado": total_administrado,
         "comision": comision,
         "subtotal_factura": subtotal_factura,
         "iva": iva,
@@ -375,8 +380,9 @@ def calcular_excedentes(monto_excedente, comision_pct):
     infonavit_hip = round(sbc_hip * INFONAVIT_TASA * 30.4, 2)
     isn_hip = round(monto_excedente * ISN_TASA, 2)
     prestaciones_hip = calcular_prestaciones_ley(sd_hipotetico)
+    # Excedentes son bonos/comisiones — no generan obligación de prestaciones de ley
     costo_hipotetico = (monto_excedente + imss_pat_hipotetico["total"]
-                        + infonavit_hip + isn_hip + prestaciones_hip["total_mensual"])
+                        + infonavit_hip + isn_hip)
 
     # Ahorro: costo nómina hipotético vs subtotal factura (pre-IVA)
     ahorro = costo_hipotetico - subtotal
