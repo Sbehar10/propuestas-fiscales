@@ -481,9 +481,12 @@ def tabla_comparativa_irt(r):
     if n > 1:
         html += f'<tr class="ahorro-row"><td><strong>Total x{n} empleados</strong></td><td class="num">{fmt_moneda(costo_act * n)}</td><td class="num">{fmt_moneda(costo_irt * n)}</td><td class="num">{fmt_moneda(ahorro * n)}</td></tr>'
 
+    # IVA (acreditable — no es costo)
+    html += f'<tr><td>IVA (acreditable)</td><td class="num">—</td><td class="num">{fmt_moneda(irt["iva"])}</td><td class="num" colspan="1">—</td></tr>'
     # Neto trabajador
     html += f'<tr><td>Neto trabajador</td><td class="num">{fmt_moneda(act["neto_trabajador"])}</td><td class="num">{fmt_moneda(irt["neto_trabajador"])}</td><td class="num">{fmt_moneda(irt["neto_trabajador"] - act["neto_trabajador"])}</td></tr>'
     html += '</table>'
+    html += '<p style="font-size:0.85em;color:#555;margin-top:0.5em;">La comision es 100% deducible para ISR empresarial y el IVA es acreditable.</p>'
     return html
 
 
@@ -498,13 +501,16 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
     ahorro_total = 0
     total_empleados = 0
     total_administrado = 0
+    total_iva = 0
 
     for r in resultados_grupos:
         costo_actual_total += r["actual"]["costo_total"]
         ahorro_total += r["ahorro_mensual"]
         total_empleados += r["num_empleados"]
         total_administrado += r["irt"]["total_administrado"] * r["num_empleados"]
+        total_iva += r["irt"]["iva"] * r["num_empleados"]
 
+    costo_propuesto_pre_iva = costo_actual_total - ahorro_total
     pct_ahorro = (ahorro_total / costo_actual_total * 100) if costo_actual_total > 0 else 0
 
     # Metricas principales
@@ -522,8 +528,8 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         st.markdown(f"""
         <div class="metric-card">
             <h3>Costo IRT Propuesto</h3>
-            <p>{fmt_moneda(costo_actual_total - ahorro_total)}</p>
-            <p class="sub">Pre-IVA (acreditable)</p>
+            <p>{fmt_moneda(costo_propuesto_pre_iva)}</p>
+            <p class="sub">Pre-IVA</p>
         </div>""", unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
@@ -539,6 +545,16 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
             <p>{fmt_moneda(ahorro_total)}</p>
             <p class="sub">{pct_ahorro:.1f}% de ahorro</p>
         </div>""", unsafe_allow_html=True)
+
+    # IVA acreditable + nota deducibilidad
+    st.markdown(f"**IVA total (acreditable):** {fmt_moneda(total_iva)} — no es costo para la empresa.")
+    st.caption("La comision es 100% deducible para ISR empresarial y el IVA es acreditable.")
+
+    # Ahorro validation
+    if ahorro_total <= 0:
+        st.warning("El ahorro total es negativo o cero. Recomendacion: ajustar las bases IMSS o considerar otro esquema.")
+    elif pct_ahorro < 3:
+        st.warning(f"El ahorro total es minimo ({pct_ahorro:.1f}%). Recomendacion: reducir bases IMSS o considerar otro esquema para algunos grupos.")
 
     st.markdown("")
 
@@ -595,7 +611,14 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                     <p>{fmt_moneda(r["ahorro_mensual"])}</p>
                 </div>""", unsafe_allow_html=True)
 
-            # P5: Comparison table
+            # Per-group ahorro validation
+            pct_ahorro_grupo = (r["ahorro_mensual"] / r["actual"]["costo_total"] * 100) if r["actual"]["costo_total"] > 0 else 0
+            if r["ahorro_mensual"] <= 0:
+                st.warning(f"Este grupo genera ahorro negativo. Recomendacion: no migrar a IRT o reducir la base IMSS.")
+            elif pct_ahorro_grupo < 3:
+                st.warning(f"Ahorro minimo ({pct_ahorro_grupo:.1f}%). Considerar reducir base IMSS o usar otro esquema.")
+
+            # Comparison table
             st.markdown(tabla_comparativa_irt(r), unsafe_allow_html=True)
 
     # === DESCARGAS ===
@@ -937,6 +960,7 @@ if tipo == "cotizador":
 
                 resultados_grupos = []
                 conversiones_neto = []  # Track neto→bruto conversions
+                ajustes_base = []  # Track auto-adjusted IMSS bases
                 for _, fila in df_agrupado.iterrows():
                     puesto_orig = fila[col_puesto]
                     sueldo_raw = fila[col_sueldo]
@@ -958,6 +982,18 @@ if tipo == "cotizador":
                         "puesto_catalogo": "Otro (personalizado)",
                         "minimo_profesional": SALARIO_MINIMO_MENSUAL,
                     })
+
+                    # Smart base IMSS: auto-reduce if min_prof >= sueldo
+                    min_prof = info_puesto["minimo_profesional"]
+                    if min_prof >= sueldo_bruto * 0.97 and sueldo_bruto > SALARIO_MINIMO_MENSUAL:
+                        info_puesto = dict(info_puesto)  # copy to avoid mutating mapeo_final
+                        info_puesto["minimo_profesional"] = SALARIO_MINIMO_MENSUAL
+                        ajustes_base.append({
+                            "puesto": puesto_orig,
+                            "sueldo": fmt_moneda(sueldo_bruto),
+                            "min_prof_original": fmt_moneda(min_prof),
+                            "base_ajustada": fmt_moneda(SALARIO_MINIMO_MENSUAL),
+                        })
 
                     r = calcular_grupo_nomina(
                         puesto=info_puesto["puesto_catalogo"],
@@ -981,6 +1017,13 @@ if tipo == "cotizador":
                         df_conv = pd.DataFrame(conversiones_neto)
                         df_conv.columns = ["Puesto", "Sueldo Periodo", "Mensual Estimado", "Bruto Estimado", "Empleados"]
                         st.dataframe(df_conv, use_container_width=True, hide_index=True)
+
+                    # Show auto-adjusted base IMSS warnings
+                    if ajustes_base:
+                        st.warning(f"Se ajusto la base IMSS de **{len(ajustes_base)}** grupo(s) al salario minimo porque el sueldo es muy cercano al minimo profesional del puesto.")
+                        df_ajustes = pd.DataFrame(ajustes_base)
+                        df_ajustes.columns = ["Puesto", "Sueldo Bruto", "Min. Profesional", "Base IMSS Ajustada"]
+                        st.dataframe(df_ajustes, use_container_width=True, hide_index=True)
 
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto)
                 else:
@@ -1016,10 +1059,11 @@ elif tipo == "nomina":
             sueldo_input = st.number_input("Sueldo mensual ($)", min_value=1000, value=15000, step=500, key="sueldo_nuevo")
             st.markdown(f"**Prima de riesgo:** {prima_riesgo_global:.5f}%")
 
-        # Show conversion preview if neto
+        # Compute effective bruto for base IMSS comparison
+        sueldo_ref = sueldo_input
         if tipo_sueldo_manual == "Neto":
-            bruto_preview = neto_a_bruto(sueldo_input, clase_riesgo_global, prima_riesgo_global)
-            st.info(f"Neto capturado: **{fmt_moneda(sueldo_input)}** → Bruto estimado: **{fmt_moneda(bruto_preview)}**")
+            sueldo_ref = neto_a_bruto(sueldo_input, clase_riesgo_global, prima_riesgo_global)
+            st.info(f"Neto capturado: **{fmt_moneda(sueldo_input)}** → Bruto estimado: **{fmt_moneda(sueldo_ref)}**")
 
         # Base IMSS libre
         if puesto_sel != "Otro (personalizado)":
@@ -1029,14 +1073,41 @@ elif tipo == "nomina":
 
         st.markdown("---")
         st.markdown(f"**Base IMSS mensual** — Minimo profesional de referencia: **{fmt_moneda(min_prof_default)}**")
-        base_imss_libre = st.number_input(
-            "Base IMSS mensual ($)",
-            min_value=float(SALARIO_MINIMO_MENSUAL),
-            value=float(min_prof_default),
-            step=500.0,
-            key="base_imss_libre",
-            help="Puedes poner cualquier monto >= salario minimo. El minimo profesional del puesto se muestra como referencia."
-        )
+
+        # Smart base IMSS options
+        opciones_base_keys = [
+            f"Salario minimo ({fmt_moneda(SALARIO_MINIMO_MENSUAL)})",
+            f"Minimo profesional ({fmt_moneda(min_prof_default)})",
+            "Personalizada",
+        ]
+        opciones_base_vals = [SALARIO_MINIMO_MENSUAL, min_prof_default, None]
+
+        # Suggest lower base when sueldo is close to min_prof
+        if sueldo_ref <= min_prof_default * 1.15:
+            idx_base_default = 0
+            st.info(f"El sueldo ({fmt_moneda(sueldo_ref)}) esta cercano al minimo profesional. Se sugiere usar salario minimo como base para maximizar el diferencial IRT.")
+        else:
+            idx_base_default = 1
+
+        opcion_base_sel = st.radio("Base IMSS sugerida:", options=opciones_base_keys, index=idx_base_default, horizontal=True, key="opcion_base")
+        base_valor = opciones_base_vals[opciones_base_keys.index(opcion_base_sel)]
+
+        if base_valor is None:
+            base_imss_libre = st.number_input(
+                "Base IMSS mensual ($)",
+                min_value=float(SALARIO_MINIMO_MENSUAL),
+                value=float(min_prof_default),
+                step=500.0,
+                key="base_imss_libre",
+                help="Puedes poner cualquier monto >= salario minimo."
+            )
+        else:
+            base_imss_libre = base_valor
+            st.markdown(f"Base IMSS seleccionada: **{fmt_moneda(base_imss_libre)}**")
+
+        # Warning if no IRT differential
+        if base_imss_libre >= sueldo_ref:
+            st.warning(f"No hay diferencial IRT: la base IMSS ({fmt_moneda(base_imss_libre)}) es >= sueldo bruto ({fmt_moneda(sueldo_ref)}). No conviene migrar a IRT. Reduce la base IMSS o considera otro esquema.")
 
         if st.button("Agregar grupo", type="primary", use_container_width=True):
             puesto_nombre = puesto_custom if puesto_sel == "Otro (personalizado)" else puesto_sel
@@ -1116,20 +1187,23 @@ elif tipo == "excedentes":
     if st.button("CALCULAR PROPUESTA", type="primary", use_container_width=True):
         r = calcular_excedentes(monto_excedente, comision_pct)
 
+        costo_exc_pre_iva = r['monto_excedente'] + r['comision']
+        pct_ahorro_exc = (r['ahorro_mensual'] / r['costo_hipotetico_nomina'] * 100) if r['costo_hipotetico_nomina'] > 0 else 0
+
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"""
             <div class="metric-card">
-                <h3>Total Factura Mensual</h3>
-                <p>{fmt_moneda(r['total_factura'])}</p>
-                <p class="sub">Incluye IVA</p>
+                <h3>Costo Empresa (pre-IVA)</h3>
+                <p>{fmt_moneda(costo_exc_pre_iva)}</p>
+                <p class="sub">Excedente + Comision</p>
             </div>""", unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
             <div class="ahorro-verde">
                 <h3>Ahorro Mensual</h3>
                 <p>{fmt_moneda(r['ahorro_mensual'])}</p>
-                <p class="sub">vs nomina 100%</p>
+                <p class="sub">{pct_ahorro_exc:.1f}% vs nomina</p>
             </div>""", unsafe_allow_html=True)
         with col3:
             st.markdown(f"""
@@ -1139,18 +1213,28 @@ elif tipo == "excedentes":
                 <p class="sub">Proyeccion 12 meses</p>
             </div>""", unsafe_allow_html=True)
 
+        # IVA acreditable + nota deducibilidad
+        st.markdown(f"**IVA (acreditable):** {fmt_moneda(r['iva'])} — no es costo para la empresa.")
+        st.caption("La comision es 100% deducible para ISR empresarial y el IVA es acreditable.")
+
+        # Ahorro validation
+        if r['ahorro_mensual'] <= 0:
+            st.warning("El ahorro es negativo. Recomendacion: revisar el monto o considerar otro esquema.")
+        elif pct_ahorro_exc < 3:
+            st.warning(f"El ahorro es minimo ({pct_ahorro_exc:.1f}%). Considerar alternativas.")
+
         # Comparativo visual
         import altair as alt
         st.markdown('<div class="section-header"><h3>Comparativo Excedentes vs Nomina</h3></div>', unsafe_allow_html=True)
         chart_data = pd.DataFrame({
-            "Esquema": ["Costo Nomina Hipotetico", "Total Factura Excedentes"],
-            "Monto": [r["costo_hipotetico_nomina"], r["total_factura"]]
+            "Esquema": ["Costo Nomina Hipotetico", "Costo Excedentes (pre-IVA)"],
+            "Monto": [r["costo_hipotetico_nomina"], costo_exc_pre_iva]
         })
         chart = alt.Chart(chart_data).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
             x=alt.X("Esquema:N", sort=None, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("Monto:Q", axis=alt.Axis(format="$,.0f")),
             color=alt.Color("Esquema:N", scale=alt.Scale(
-                domain=["Costo Nomina Hipotetico", "Total Factura Excedentes"],
+                domain=["Costo Nomina Hipotetico", "Costo Excedentes (pre-IVA)"],
                 range=["#1B3A5C", "#27AE60"]
             ), legend=None),
             tooltip=[alt.Tooltip("Esquema:N"), alt.Tooltip("Monto:Q", format="$,.2f")]
@@ -1293,21 +1377,23 @@ elif tipo == "sc":
             for r in resultados_sc:
                 st.markdown(f'<div class="section-header"><h3>{r["nombre"]}</h3></div>', unsafe_allow_html=True)
 
+                costo_sc_pre_iva = r['ingreso_total'] + r['comision']
+
                 # Clear cost summary when piramidando
                 if r.get("piramidar"):
                     st.markdown(
                         f"Para que el directivo reciba **{fmt_moneda(r['neto_total'])}** netos, "
                         f"el ingreso bruto necesario es **{fmt_moneda(r['ingreso_total'])}** "
-                        f"y el costo total (con comision + IVA) es **{fmt_moneda(r['total_factura'])}**."
+                        f"y el costo empresa (pre-IVA) es **{fmt_moneda(costo_sc_pre_iva)}**."
                     )
 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.markdown(f"""
                     <div class="metric-card">
-                        <h3>Ingreso Total</h3>
-                        <p>{fmt_moneda(r['ingreso_total'])}</p>
-                        <p class="sub">Bruto calculado</p>
+                        <h3>Costo Empresa (pre-IVA)</h3>
+                        <p>{fmt_moneda(costo_sc_pre_iva)}</p>
+                        <p class="sub">Ingreso + Comision</p>
                     </div>""", unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"""
@@ -1317,13 +1403,6 @@ elif tipo == "sc":
                         <p class="sub">Anticipo + Renta</p>
                     </div>""", unsafe_allow_html=True)
                 with col3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <h3>Total Factura</h3>
-                        <p>{fmt_moneda(r['total_factura'])}</p>
-                        <p class="sub">Con IVA</p>
-                    </div>""", unsafe_allow_html=True)
-                with col4:
                     pct_ahorro_sc = (r['ahorro_cliente_mensual'] / r['costo_nomina_100'] * 100) if r['costo_nomina_100'] > 0 else 0
                     st.markdown(f"""
                     <div class="ahorro-verde">
@@ -1331,6 +1410,23 @@ elif tipo == "sc":
                         <p>{fmt_moneda(r['ahorro_cliente_mensual'])}</p>
                         <p class="sub">{pct_ahorro_sc:.1f}% vs nomina</p>
                     </div>""", unsafe_allow_html=True)
+                with col4:
+                    st.markdown(f"""
+                    <div class="ahorro-verde">
+                        <h3>Ahorro Anual</h3>
+                        <p>{fmt_moneda(r['ahorro_cliente_anual'])}</p>
+                        <p class="sub">Proyeccion 12 meses</p>
+                    </div>""", unsafe_allow_html=True)
+
+                # IVA acreditable + nota deducibilidad
+                st.markdown(f"**IVA (acreditable):** {fmt_moneda(r['iva'])} — no es costo para la empresa.")
+                st.caption("La comision es 100% deducible para ISR empresarial y el IVA es acreditable.")
+
+                # Ahorro validation
+                if r['ahorro_cliente_mensual'] <= 0:
+                    st.warning(f"Ahorro negativo para {r['nombre']}. Recomendacion: revisar % anticipo o considerar otro esquema.")
+                elif pct_ahorro_sc < 3:
+                    st.warning(f"Ahorro minimo ({pct_ahorro_sc:.1f}%) para {r['nombre']}. Considerar alternativas.")
 
                 st.markdown("")
 
