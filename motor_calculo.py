@@ -377,7 +377,6 @@ def calcular_excedentes(monto_excedente, comision_pct):
     imss_pat_hipotetico = calcular_imss_patronal(sd_hipotetico, 30.4, "I")
     infonavit_hip = round(sbc_hip * INFONAVIT_TASA * 30.4, 2)
     isn_hip = round(monto_excedente * ISN_TASA, 2)
-    prestaciones_hip = calcular_prestaciones_ley(sd_hipotetico)
     # Excedentes son bonos/comisiones — no generan obligación de prestaciones de ley
     costo_hipotetico = (monto_excedente + imss_pat_hipotetico["total"]
                         + infonavit_hip + isn_hip)
@@ -395,7 +394,6 @@ def calcular_excedentes(monto_excedente, comision_pct):
         "imss_pat_hipotetico": imss_pat_hipotetico["total"],
         "infonavit_hipotetico": infonavit_hip,
         "isn_hipotetico": isn_hip,
-        "prestaciones_hipotetico": prestaciones_hip["total_mensual"],
         "ahorro_mensual": ahorro,
         "ahorro_anual": ahorro * 12,
     }

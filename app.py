@@ -1590,7 +1590,6 @@ elif tipo == "excedentes":
             comp_html += f'<tr><td>IMSS patronal</td><td class="num">{fmt_moneda(r["imss_pat_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
             comp_html += f'<tr><td>INFONAVIT</td><td class="num">{fmt_moneda(r["infonavit_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
             comp_html += f'<tr><td>ISN ({tasa_isn*100:.1f}%)</td><td class="num">{fmt_moneda(r["isn_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
-            comp_html += f'<tr><td>Prestaciones de ley</td><td class="num">{fmt_moneda(r["prestaciones_hipotetico"])}</td><td class="num">{fmt_moneda(0)}</td></tr>'
             comp_html += f'<tr><td>Comision</td><td class="num">{fmt_moneda(0)}</td><td class="num">{fmt_moneda(r["comision"])}</td></tr>'
             comp_html += f'<tr><td>IVA (acreditable)</td><td class="num">—</td><td class="num">{fmt_moneda(r["iva"])}</td></tr>'
             comp_html += f'<tr class="ahorro-row"><td><strong>Costo total empresa</strong></td><td class="num">{fmt_moneda(r["costo_hipotetico_nomina"])}</td><td class="num">{fmt_moneda(r["monto_excedente"] + r["comision"])}</td></tr>'
