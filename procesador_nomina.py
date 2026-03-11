@@ -118,7 +118,35 @@ def detectar_columnas(df):
         if score_e > 0 and _es_columna_numerica(df, col):
             resultado["num_empleados"] = col
 
+    # Fallback puesto: si no se encontró, buscar columna con nombre/empleado/trabajador
+    if resultado["puesto"] is None:
+        PUESTO_FALLBACK = ["nombre", "empleado", "trabajador", "personal"]
+        for col in df.columns:
+            if str(col).lower().startswith("unnamed"):
+                continue
+            col_norm = _normalizar(col)
+            if any(k in col_norm for k in PUESTO_FALLBACK) and _es_columna_texto(df, col):
+                resultado["puesto"] = col
+                break
+
     return resultado
+
+
+# ============================================================
+# LIMPIEZA DE FILAS DE RESUMEN / TOTALES
+# ============================================================
+def limpiar_filas_resumen(df, col_sueldo):
+    """Elimina filas de totales, resúmenes y valores no numéricos en sueldo."""
+    if col_sueldo not in df.columns:
+        return df
+    # Eliminar filas con texto en columna de sueldo
+    mask = pd.to_numeric(df[col_sueldo], errors="coerce").notna()
+    # Eliminar filas donde primera columna contiene palabras de resumen
+    primera_col = df.columns[0]
+    palabras_resumen = ["suma", "total", "subtotal", "desgloce", "nomina", "costo",
+                        "comision", "factura", "none", "nan", ""]
+    mask2 = ~df[primera_col].astype(str).str.lower().str.strip().isin(palabras_resumen)
+    return df[mask & mask2].reset_index(drop=True)
 
 
 # ============================================================

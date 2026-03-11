@@ -13,7 +13,7 @@ from motor_calculo import (
 )
 from procesador_nomina import (
     detectar_columnas, detectar_bruto_neto, detectar_periodo,
-    convertir_a_bruto_mensual, mapear_puestos, validar_datos
+    convertir_a_bruto_mensual, limpiar_filas_resumen, mapear_puestos, validar_datos
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
@@ -962,10 +962,17 @@ if tipo == "cotizador":
         col_sueldo = cols_detectadas["sueldo"]
         col_empleados = cols_detectadas["num_empleados"]
 
-        if col_puesto is None or col_sueldo is None:
-            st.error("⚠️ No se detectaron columnas de puesto y/o sueldo. Verifica que tu archivo sea una nómina de personal con columnas identificadas.")
+        if col_sueldo is None:
+            st.error("⚠️ No se detectó columna de sueldo. Verifica que tu archivo tenga una columna con montos de nómina.")
             st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
             st.stop()
+
+        if col_puesto is None:
+            # Sin columna de puesto: crear columna genérica
+            _COL_PUESTO_GEN = "_puesto_generico"
+            df_raw[_COL_PUESTO_GEN] = "Otro (personalizado)"
+            col_puesto = _COL_PUESTO_GEN
+            st.warning("No se detectó columna de puesto. Se asignará 'Otro (personalizado)' a todos los empleados.")
 
         tipo_sueldo_detectado = detectar_bruto_neto(df_raw, col_sueldo)
 
@@ -1077,24 +1084,9 @@ if tipo == "cotizador":
             if not cada_fila_un_empleado:
                 df_trabajo[col_empleados] = pd.to_numeric(_safe_series(df_trabajo, col_empleados), errors="coerce").fillna(1).astype(int)
 
-            # --- ERROR 1 FIX: Filtrar filas de totales/sumas ---
+            # --- Filtrar filas de totales/sumas/resúmenes ---
             filas_antes = len(df_trabajo)
-            # Remove rows where puesto column says TOTAL/SUMA/SUBTOTAL or is empty
-            puesto_series = _safe_series(df_trabajo, col_puesto).astype(str).str.strip().str.upper()
-            mask_total = puesto_series.isin(["TOTAL", "SUMA", "SUBTOTAL", "GRAN TOTAL", "NAN", ""])
-            # Remove rows where all text columns are empty but sueldo has a number
-            mask_empty_text = puesto_series.isin(["NAN", "", "NONE"])
-            # Remove row if its sueldo equals the sum of all other sueldos (likely a total row)
-            sueldo_vals = _safe_series(df_trabajo, col_sueldo)
-            suma_todos = sueldo_vals.sum()
-            mask_es_suma = False
-            if len(sueldo_vals) > 2:
-                for idx in sueldo_vals.index:
-                    val = sueldo_vals.loc[idx]
-                    resto = suma_todos - val
-                    if abs(val - resto) < 1.0 and val > 0:
-                        mask_total = mask_total | (sueldo_vals.index == idx)
-            df_trabajo = df_trabajo[~(mask_total | mask_empty_text)].reset_index(drop=True)
+            df_trabajo = limpiar_filas_resumen(df_trabajo, col_sueldo)
             filas_eliminadas = filas_antes - len(df_trabajo)
             if filas_eliminadas > 0:
                 st.info(f"Se eliminaron **{filas_eliminadas}** fila(s) de totales/sumas detectadas.")
