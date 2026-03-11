@@ -17,6 +17,18 @@ from procesador_nomina import (
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
+
+def fmt_tarjeta(valor):
+    """Formato abreviado para tarjetas: $6.04M, $604.5K, $999.00"""
+    av = abs(valor)
+    signo = "-" if valor < 0 else ""
+    if av >= 1_000_000:
+        return f"{signo}${av/1_000_000:.2f}M"
+    elif av >= 1_000:
+        return f"{signo}${av/1_000:.1f}K"
+    return f"{signo}${av:,.2f}"
+
+
 # === CONFIGURACION DE PAGINA ===
 st.set_page_config(
     page_title="Sistema de Cotizacion Fiscal 2026",
@@ -598,15 +610,15 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         st.markdown(f"""
         <div class="metric-card">
             <h3>Costo Actual Mensual</h3>
-            <p>{fmt_moneda(costo_actual_total)}</p>
-            <p class="sub">Nomina 100%</p>
+            <p>{fmt_tarjeta(costo_actual_total)}</p>
+            <p class="sub">{fmt_moneda(costo_actual_total)}</p>
         </div>""", unsafe_allow_html=True)
     with col2:
         st.markdown(f"""
         <div class="metric-card">
             <h3>Costo IRT Propuesto</h3>
-            <p>{fmt_moneda(costo_propuesto_pre_iva)}</p>
-            <p class="sub">Pre-IVA</p>
+            <p>{fmt_tarjeta(costo_propuesto_pre_iva)}</p>
+            <p class="sub">{fmt_moneda(costo_propuesto_pre_iva)} (pre-IVA)</p>
         </div>""", unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
@@ -619,8 +631,8 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         st.markdown(f"""
         <div class="ahorro-verde">
             <h3>Ahorro Mensual</h3>
-            <p>{fmt_moneda(ahorro_total)}</p>
-            <p class="sub">{pct_ahorro:.1f}% de ahorro</p>
+            <p>{fmt_tarjeta(ahorro_total)}</p>
+            <p class="sub">{fmt_moneda(ahorro_total)} ({pct_ahorro:.1f}%)</p>
         </div>""", unsafe_allow_html=True)
     if col5:
         with col5:
@@ -687,26 +699,29 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Neto Empleado</h3>
-                        <p>{fmt_moneda(neto_orig)}</p>
-                        <p class="sub">Sin cambio</p>
+                        <p>{fmt_tarjeta(neto_orig)}</p>
+                        <p class="sub">{fmt_moneda(neto_orig)} — sin cambio</p>
                     </div>""", unsafe_allow_html=True)
                 with c2:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Costo Actual / mes</h3>
-                        <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
+                        <p>{fmt_tarjeta(r["actual"]["costo_total"])}</p>
+                        <p class="sub">{fmt_moneda(r["actual"]["costo_total"])}</p>
                     </div>""", unsafe_allow_html=True)
                 with c3:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Base Nomina IRT</h3>
-                        <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
+                        <p>{fmt_tarjeta(r["irt"]["base_nomina"])}</p>
+                        <p class="sub">{fmt_moneda(r["irt"]["base_nomina"])}</p>
                     </div>""", unsafe_allow_html=True)
                 with c4:
                     st.markdown(f"""
                     <div class="ahorro-verde">
                         <h3>Ahorro / mes</h3>
-                        <p>{fmt_moneda(r["ahorro_mensual"])}</p>
+                        <p>{fmt_tarjeta(r["ahorro_mensual"])}</p>
+                        <p class="sub">{fmt_moneda(r["ahorro_mensual"])}</p>
                     </div>""", unsafe_allow_html=True)
             else:
                 c1, c2, c3 = st.columns(3)
@@ -714,19 +729,22 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Costo Actual / mes</h3>
-                        <p>{fmt_moneda(r["actual"]["costo_total"])}</p>
+                        <p>{fmt_tarjeta(r["actual"]["costo_total"])}</p>
+                        <p class="sub">{fmt_moneda(r["actual"]["costo_total"])}</p>
                     </div>""", unsafe_allow_html=True)
                 with c2:
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>Base Nomina IRT</h3>
-                        <p>{fmt_moneda(r["irt"]["base_nomina"])}</p>
+                        <p>{fmt_tarjeta(r["irt"]["base_nomina"])}</p>
+                        <p class="sub">{fmt_moneda(r["irt"]["base_nomina"])}</p>
                     </div>""", unsafe_allow_html=True)
                 with c3:
                     st.markdown(f"""
                     <div class="ahorro-verde">
                         <h3>Ahorro / mes</h3>
-                        <p>{fmt_moneda(r["ahorro_mensual"])}</p>
+                        <p>{fmt_tarjeta(r["ahorro_mensual"])}</p>
+                        <p class="sub">{fmt_moneda(r["ahorro_mensual"])}</p>
                     </div>""", unsafe_allow_html=True)
 
             # Per-group ahorro validation
