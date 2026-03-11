@@ -90,6 +90,13 @@ def detectar_columnas(df):
         # Score para sueldo — solo columnas numéricas
         s_sueldo = _score_columna(col_norm, KEYWORDS_SUELDO)
         if s_sueldo > scores["sueldo"] and _es_columna_numerica(df, col):
+            # Filtro: mediana realista de sueldo
+            try:
+                vals = pd.to_numeric(df[col], errors="coerce").dropna()
+                if len(vals) > 0 and vals.median() < 500:
+                    continue  # Descartar columnas con valores muy bajos (factores, tasas, etc.)
+            except Exception:
+                pass
             scores["sueldo"] = s_sueldo
             resultado["sueldo"] = col
 
