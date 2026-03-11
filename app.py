@@ -831,24 +831,37 @@ if tipo == "cotizador":
 
     if archivo is not None:
         # --- Lectura inteligente de archivos ---
-        _KEYWORDS_HEADER = [
-            "puesto", "cargo", "sueldo", "salario", "neto", "bruto", "nombre",
-            "empleado", "imss", "total", "mensual", "quincenal", "deposito",
-            "dias", "sd", "ingreso", "percepcion", "director", "gerente",
-        ]
+        _KW_PUESTO_H = ["puesto", "cargo", "posicion", "plaza", "rol"]
+        _KW_SUELDO_H = ["sueldo", "salario", "neto", "bruto", "ingreso", "percepcion",
+                         "deposito", "mensual", "quincenal", "importe", "monto",
+                         "neto real", "salario diario", "sueldo mensual", "asimilados"]
+        _KW_EXTRA_H = ["empleado", "imss", "total", "dias", "sd", "director", "gerente", "nombre"]
 
         def _score_header(df_candidate):
-            """Score a DataFrame by how many columns have recognizable names."""
+            """Score a DataFrame: requiere al menos 1 col puesto + 1 col sueldo."""
+            tiene_puesto = False
+            tiene_sueldo = False
             score = 0
             for c in df_candidate.columns:
                 col_norm = str(c).lower().strip()
-                if any(kw in col_norm for kw in _KEYWORDS_HEADER):
+                if col_norm.startswith("unnamed") or col_norm in ("none", "nan", ""):
+                    continue
+                if any(kw in col_norm for kw in _KW_PUESTO_H):
+                    tiene_puesto = True
+                    score += 2
+                elif any(kw in col_norm for kw in _KW_SUELDO_H):
+                    tiene_sueldo = True
+                    score += 2
+                elif any(kw in col_norm for kw in _KW_EXTRA_H):
                     score += 1
-                if not col_norm.startswith("unnamed") and col_norm != "none" and col_norm != "nan":
+                else:
                     try:
                         float(col_norm)
                     except ValueError:
                         score += 0.5
+            # Penalizar si no tiene ambas columnas esenciales
+            if not (tiene_puesto and tiene_sueldo):
+                score *= 0.3
             return score
 
         def _fix_col_names(df_in):
