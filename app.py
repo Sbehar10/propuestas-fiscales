@@ -811,25 +811,6 @@ if tipo == "cotizador":
         steps_html += f'<div class="progress-step {cls}">{lbl}</div>'
     st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
-    # --- Periodo de nomina (ERROR 2 fix) ---
-    st.markdown("#### Periodo de la nomina")
-    periodo_nomina = st.radio(
-        "Los sueldos del archivo son:",
-        options=["Mensual", "Quincenal", "Catorcenal", "Semanal"],
-        index=0,
-        horizontal=True,
-        key="periodo_nomina",
-    )
-    multiplicadores_periodo = {
-        "Mensual": 1.0,
-        "Quincenal": 2.0,
-        "Catorcenal": 365.0 / 14.0 / 12.0,  # 2.1726
-        "Semanal": 365.0 / 7.0 / 12.0,       # 4.3452
-    }
-    mult_periodo = multiplicadores_periodo[periodo_nomina]
-    if periodo_nomina != "Mensual":
-        st.info(f"Los sueldos se multiplicaran por **{mult_periodo:.4f}** para convertir a mensual.")
-
     if archivo is not None:
         # Leer archivo — P4: multi-sheet + smart header detection
         try:
@@ -913,6 +894,28 @@ if tipo == "cotizador":
         periodo = detectar_periodo(df_raw)
         tipo_salario = detectar_bruto_neto(df_raw, cols_detectadas.get("sueldo"))
         st.info(f"📋 Detectado automáticamente: período **{periodo.upper()}** | salario **{tipo_salario.upper()}**")
+
+        # --- Periodo de nomina (auto-detect sets default) ---
+        st.markdown("#### Periodo de la nomina")
+        _opciones_periodo = ["Mensual", "Quincenal", "Catorcenal", "Semanal"]
+        _idx_periodo = {"mensual": 0, "quincenal": 1, "semanal": 3}.get(periodo, 0)
+        periodo_nomina = st.radio(
+            "Los sueldos del archivo son:",
+            options=_opciones_periodo,
+            index=_idx_periodo,
+            horizontal=True,
+            key="periodo_nomina",
+        )
+        multiplicadores_periodo = {
+            "Mensual": 1.0,
+            "Quincenal": 2.0,
+            "Catorcenal": 365.0 / 14.0 / 12.0,  # 2.1726
+            "Semanal": 365.0 / 7.0 / 12.0,       # 4.3452
+        }
+        mult_periodo = multiplicadores_periodo[periodo_nomina]
+        if periodo_nomina != "Mensual":
+            st.info(f"Los sueldos se multiplicaran por **{mult_periodo:.4f}** para convertir a mensual.")
+
         columnas_df = list(df_raw.columns)
 
         col1, col2, col3 = st.columns(3)
