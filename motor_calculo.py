@@ -44,12 +44,12 @@ def calcular_isr(base_gravable):
 # SBC (Salario Base de Cotización)
 # ============================================================
 def calcular_sbc_diario(salario_diario):
-    """SBC diario = SD topado a 25 UMA.
-    NO se aplica factor de integración porque las prestaciones de ley
-    (aguinaldo, vacaciones, prima vacacional) se calculan por separado.
-    Aplicar factor + calcular prestaciones aparte duplicaría el costo."""
+    """SBC diario = SD × factor de integración, topado a 25 UMA.
+    Factor 1.0493 = prestaciones mínimas de ley integradas:
+      1 + (25%×6/365) + (15/365) ≈ 1.0493
+    Replica fórmula Excel: MIN(SD×1.0493, UMA_DIARIO×25)"""
     tope = UMA_DIARIO * TOPE_SBC_UMA
-    return min(round(salario_diario, 2), tope)
+    return min(round(salario_diario * FACTOR_INTEGRACION, 2), tope)
 
 
 # ============================================================
