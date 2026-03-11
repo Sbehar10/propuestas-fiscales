@@ -812,14 +812,62 @@ if tipo == "cotizador":
     st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
     if archivo is not None:
-        # Leer archivo — P4: multi-sheet + smart header detection
+        # Leer archivo — smart header detection (prueba header=0..3)
+        def _score_header(df_candidate):
+            """Score a DataFrame by how many columns have recognizable text names."""
+            score = 0
+            for c in df_candidate.columns:
+                s = str(c).strip()
+                if s and s.lower() != "nan" and not s.startswith("Unnamed"):
+                    try:
+                        float(s)
+                    except ValueError:
+                        score += 1  # Non-numeric, non-empty name
+            return score
+
+        def _fix_col_names(df_in):
+            """Fix empty/NaN column names and deduplicate."""
+            new_cols = []
+            for i, c in enumerate(df_in.columns):
+                if c is None or str(c).strip() == "" or str(c).lower() == "nan":
+                    new_cols.append(f"Col_{i+1}")
+                else:
+                    new_cols.append(str(c).strip())
+            seen = {}
+            deduped = []
+            for c in new_cols:
+                if c in seen:
+                    seen[c] += 1
+                    deduped.append(f"{c}_{seen[c]}")
+                else:
+                    seen[c] = 0
+                    deduped.append(c)
+            df_in.columns = deduped
+            return df_in
+
         try:
             if archivo.name.endswith(".csv"):
-                try:
-                    df_raw = pd.read_csv(archivo, encoding="utf-8")
-                except UnicodeDecodeError:
-                    archivo.seek(0)
-                    df_raw = pd.read_csv(archivo, encoding="latin-1")
+                best_df = None
+                best_score = -1
+                for h in range(4):
+                    try:
+                        archivo.seek(0)
+                        candidate = pd.read_csv(archivo, encoding="utf-8", header=h)
+                        candidate = candidate.dropna(how="all").reset_index(drop=True)
+                        s = _score_header(candidate)
+                        if s > best_score:
+                            best_score = s
+                            best_df = candidate
+                    except Exception:
+                        pass
+                if best_df is None:
+                    try:
+                        archivo.seek(0)
+                        best_df = pd.read_csv(archivo, encoding="latin-1")
+                    except Exception:
+                        archivo.seek(0)
+                        best_df = pd.read_csv(archivo)
+                df_raw = best_df
             else:
                 # Multi-sheet: let user pick sheet
                 archivo.seek(0)
@@ -833,41 +881,26 @@ if tipo == "cotizador":
                     )
                 else:
                     sheet_sel = sheet_names[0]
-                df_raw = pd.read_excel(xls, sheet_name=sheet_sel, header=None)
 
-                # Smart header: find first row with >= 2 non-null text values
-                header_row = 0
-                for i in range(min(15, len(df_raw))):
-                    row_vals = df_raw.iloc[i].dropna()
-                    text_vals = [v for v in row_vals if isinstance(v, str) and len(str(v).strip()) > 1]
-                    if len(text_vals) >= 2:
-                        header_row = i
-                        break
-                if header_row > 0 or True:
-                    df_raw.columns = df_raw.iloc[header_row].astype(str)
-                    df_raw = df_raw.iloc[header_row + 1:].reset_index(drop=True)
-                # Drop fully empty rows
-                df_raw = df_raw.dropna(how="all").reset_index(drop=True)
+                # Try header=0..3, pick the one with most recognizable column names
+                best_df = None
+                best_score = -1
+                for h in range(4):
+                    try:
+                        candidate = pd.read_excel(xls, sheet_name=sheet_sel, header=h)
+                        candidate = candidate.dropna(how="all").reset_index(drop=True)
+                        s = _score_header(candidate)
+                        if s > best_score:
+                            best_score = s
+                            best_df = candidate
+                    except Exception:
+                        pass
+                if best_df is None:
+                    best_df = pd.read_excel(xls, sheet_name=sheet_sel)
+                df_raw = best_df
 
-
-            # --- Fix column names: empty/NaN and duplicates (CSV + Excel) ---
-            new_cols = []
-            for i, c in enumerate(df_raw.columns):
-                if c is None or str(c).strip() == "" or str(c) == "nan":
-                    new_cols.append(f"Col_{i+1}")
-                else:
-                    new_cols.append(str(c).strip())
-            # Deduplicate
-            seen = {}
-            deduped = []
-            for c in new_cols:
-                if c in seen:
-                    seen[c] += 1
-                    deduped.append(f"{c}_{seen[c]}")
-                else:
-                    seen[c] = 0
-                    deduped.append(c)
-            df_raw.columns = deduped
+            df_raw = df_raw.dropna(how="all").reset_index(drop=True)
+            df_raw = _fix_col_names(df_raw)
 
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
@@ -888,12 +921,27 @@ if tipo == "cotizador":
                 return result.iloc[:, 0]
             return result
 
-        # --- Column mapping ---
-        st.markdown("#### Mapeo de columnas")
+        # --- Auto-detect columns ---
         cols_detectadas = detectar_columnas(df_raw)
         periodo = detectar_periodo(df_raw)
-        tipo_salario = detectar_bruto_neto(df_raw, cols_detectadas.get("sueldo"))
-        st.info(f"📋 Detectado automáticamente: período **{periodo.upper()}** | salario **{tipo_salario.upper()}**")
+
+        col_puesto = cols_detectadas["puesto"]
+        col_sueldo = cols_detectadas["sueldo"]
+        col_empleados = cols_detectadas["num_empleados"]
+
+        if col_sueldo is None:
+            st.error("No se pudo detectar la columna de sueldo. Verifica que tu archivo tenga una columna con montos de nómina.")
+            st.stop()
+        if col_puesto is None:
+            st.error("No se pudo detectar la columna de puesto. Verifica que tu archivo tenga una columna con nombres de puestos.")
+            st.stop()
+
+        cada_fila_un_empleado = col_empleados is None
+
+        _msg_cols = f"Puesto → **{col_puesto}** | Sueldo → **{col_sueldo}**"
+        if not cada_fila_un_empleado:
+            _msg_cols += f" | Empleados → **{col_empleados}**"
+        st.success(f"✅ Columnas detectadas automáticamente: {_msg_cols}")
 
         # --- Periodo de nomina (auto-detect sets default) ---
         st.markdown("#### Periodo de la nomina")
@@ -917,49 +965,6 @@ if tipo == "cotizador":
             st.info(f"Los sueldos se multiplicaran por **{mult_periodo:.4f}** para convertir a mensual.")
 
         columnas_df = list(df_raw.columns)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            idx_puesto = columnas_df.index(cols_detectadas["puesto"]) if cols_detectadas["puesto"] in columnas_df else 0
-            col_puesto = st.selectbox("Columna de Puesto", options=columnas_df, index=idx_puesto, key="col_puesto")
-        with col2:
-            idx_sueldo = columnas_df.index(cols_detectadas["sueldo"]) if cols_detectadas["sueldo"] in columnas_df else 0
-            col_sueldo = st.selectbox("Columna de Sueldo", options=columnas_df, index=idx_sueldo, key="col_sueldo")
-        with col3:
-            opciones_emp = ["(ninguna — cada fila = 1 empleado)"] + columnas_df
-            idx_emp = 0  # Default: ninguna
-            col_empleados = st.selectbox("Columna de # Empleados", options=opciones_emp, index=idx_emp, key="col_emp")
-
-        cada_fila_un_empleado = col_empleados == "(ninguna — cada fila = 1 empleado)"
-
-        # --- Validate # Empleados column ---
-        if not cada_fila_un_empleado:
-            _emp_serie = pd.to_numeric(_safe_series(df_raw, col_empleados), errors="coerce").dropna()
-            if len(_emp_serie) > 2:
-                # Check if all values are 1
-                if (_emp_serie == 1).all():
-                    st.warning(f"La columna **{col_empleados}** tiene valor 1 en todas las filas. Probablemente cada fila ya es 1 empleado. Considera usar '(ninguna)'.")
-                else:
-                    # Check if it's a consecutive sequence (1,2,3,4...)
-                    _sorted = _emp_serie.sort_index().reset_index(drop=True)
-                    _expected = pd.Series(range(1, len(_sorted) + 1), dtype=float)
-                    if (_sorted.values == _expected.values).all() or (_sorted.diff().dropna() == 1).all():
-                        st.warning(f"La columna **{col_empleados}** parece ser un consecutivo (1, 2, 3...), no cantidad de empleados. Estas seguro?")
-
-        # --- Validation: columns must be different ---
-        if col_sueldo == col_puesto:
-            st.error("La columna de Sueldo y la de Puesto deben ser diferentes.")
-            st.stop()
-        if not cada_fila_un_empleado and col_empleados in (col_sueldo, col_puesto):
-            st.error("La columna de # Empleados debe ser diferente a las de Sueldo y Puesto.")
-            st.stop()
-
-        # --- Validate sueldo column is numeric ---
-        _sueldo_serie = _safe_series(df_raw, col_sueldo)
-        _num_check = pd.to_numeric(_sueldo_serie, errors="coerce")
-        _pct_numerico = _num_check.notna().sum() / max(len(_sueldo_serie.dropna()), 1)
-        if _pct_numerico < 0.3:
-            st.warning(f"La columna **{col_sueldo}** no parece contener valores numericos ({_pct_numerico:.0%} son numeros). Verifica que seleccionaste la columna correcta.")
 
         # --- Columnas adicionales de ingreso (opcional) ---
         st.markdown("#### Columnas adicionales de ingreso (opcional)")
