@@ -1142,7 +1142,7 @@ if tipo == "cotizador":
 
             # --- Filtrar filas de totales/sumas/resúmenes ---
             filas_antes = len(df_trabajo)
-            df_trabajo = limpiar_filas_resumen(df_trabajo, col_sueldo)
+            df_trabajo = limpiar_filas_resumen(df_trabajo, col_sueldo, col_puesto)
             filas_eliminadas = filas_antes - len(df_trabajo)
             if filas_eliminadas > 0:
                 st.info(f"Se eliminaron **{filas_eliminadas}** fila(s) de totales/sumas detectadas.")

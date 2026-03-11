@@ -153,18 +153,36 @@ def detectar_columnas(df):
 # ============================================================
 # LIMPIEZA DE FILAS DE RESUMEN / TOTALES
 # ============================================================
-def limpiar_filas_resumen(df, col_sueldo):
+_PALABRAS_RESUMEN_EXACT = [
+    "total", "suma", "subtotal", "comision", "comisión", "desgloce",
+    "nomina", "costo", "factura", "none", "nan", "",
+]
+_PALABRAS_RESUMEN_PARTIAL = [
+    r"\btotal\b", r"\bsuma\b", r"\bsubtotal\b", r"\bcomision\b", r"\bcomisión\b",
+    r"\biva\b", r"\bimpuesto\b", r"\bdesgloce\b", r"\bconcepto\b",
+    r"\bdescripcion\b", r"\bpromedio\b", r"\bobservacion\b",
+]
+_RESUMEN_PATTERN = "|".join(_PALABRAS_RESUMEN_PARTIAL)
+
+
+def limpiar_filas_resumen(df, col_sueldo, col_nombre=None):
     """Elimina filas de totales, resúmenes y valores no numéricos en sueldo."""
     if col_sueldo not in df.columns:
         return df
-    # Eliminar filas con texto en columna de sueldo
+    # Eliminar filas con texto/NaN en columna de sueldo
     mask = pd.to_numeric(df[col_sueldo], errors="coerce").notna()
-    # Eliminar filas donde primera columna contiene palabras de resumen
+
+    # Eliminar filas donde primera columna contiene palabras de resumen (exact match)
     primera_col = df.columns[0]
-    palabras_resumen = ["suma", "total", "subtotal", "desgloce", "nomina", "costo",
-                        "comision", "factura", "none", "nan", ""]
-    mask2 = ~df[primera_col].astype(str).str.lower().str.strip().isin(palabras_resumen)
-    return df[mask & mask2].reset_index(drop=True)
+    mask2 = ~df[primera_col].astype(str).str.lower().str.strip().isin(_PALABRAS_RESUMEN_EXACT)
+
+    # Eliminar filas donde col_nombre contiene palabras de resumen (word-boundary match)
+    if col_nombre and col_nombre in df.columns:
+        mask3 = ~df[col_nombre].astype(str).str.lower().str.contains(_RESUMEN_PATTERN, na=False, regex=True)
+    else:
+        mask3 = True
+
+    return df[mask & mask2 & mask3].reset_index(drop=True)
 
 
 # ============================================================
@@ -316,7 +334,7 @@ def validar_datos(df, cols):
     if col_sueldo and col_sueldo in df.columns:
         no_numerico = pd.to_numeric(df[col_sueldo], errors="coerce").isna().sum()
         if no_numerico > 0:
-            warnings.append(f"Se encontraron {no_numerico} valores no numéricos en '{col_sueldo}'.")
+            warnings.append(f"{no_numerico} filas con valores no numericos en '{col_sueldo}' seran omitidas.")
 
         sueldos = pd.to_numeric(df[col_sueldo], errors="coerce").dropna()
         bajo_sm = (sueldos < SALARIO_MINIMO_MENSUAL).sum()
