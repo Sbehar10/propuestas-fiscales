@@ -71,7 +71,10 @@ def detectar_columnas(df):
                    "neto mensual", "sueldo neto", "salario neto",
                    "bruto mensual", "sueldo bruto", "salario bruto", "deposito",
                    "neto real", "percepcion neta", "importe neto",
-                   "neto quincenal", "neto semanal", "sueldo mensual", "ingreso mensual"]
+                   "neto quincenal", "neto semanal", "sueldo mensual", "ingreso mensual",
+                   "salario mensual", "sd real", "sd fiscal", "asimilado", "importe",
+                   "salario diario", "remuneracion", "monto",
+                   "sueldo", "salario", "pago"]
 
     EMPLEADOS_KEYS = ["cantidad", "headcount", "num_empleados", "numero de empleados", "qty"]
 
