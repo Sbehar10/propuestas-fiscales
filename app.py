@@ -1245,6 +1245,11 @@ if tipo == "cotizador":
                 if "_ingreso_exento" not in df_trabajo.columns:
                     df_trabajo["_ingreso_exento"] = 0
 
+                # Filtrar filas con sueldo <= 0 o puesto vacío antes de agrupar
+                df_trabajo = df_trabajo[df_trabajo[col_sueldo] > 0].copy()
+                _puestos_str = _safe_series(df_trabajo, col_puesto).astype(str).str.strip()
+                df_trabajo = df_trabajo[_puestos_str.ne("") & _puestos_str.str.lower().ne("nan")]
+
                 if cada_fila_un_empleado:
                     # Agrupar por puesto catálogo mapeado (no por fila individual)
                     df_trabajo["_puesto_cat"] = _safe_series(df_trabajo, col_puesto).map(
