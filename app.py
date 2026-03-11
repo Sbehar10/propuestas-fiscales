@@ -1009,9 +1009,12 @@ if tipo == "cotizador":
         col_empleados = cols_detectadas["num_empleados"]
 
         if col_sueldo is None:
-            st.error("⚠️ No se detectó columna de sueldo. Verifica que tu archivo tenga una columna con montos de nómina.")
+            st.error("No se detecto columna de sueldo. Verifica que tu archivo tenga una columna con montos de nomina.")
             st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
             st.stop()
+
+        if cols_detectadas.get("sueldo_vacio"):
+            st.warning(f"Columna **'{col_sueldo}'** detectada pero sin datos numericos. Ingresa los montos de nomina en tu archivo.")
 
         if col_puesto is None:
             # Sin columna de puesto: crear columna genérica

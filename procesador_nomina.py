@@ -78,9 +78,10 @@ def detectar_columnas(df):
 
     EMPLEADOS_KEYS = ["cantidad", "headcount", "num_empleados", "numero de empleados", "qty"]
 
-    resultado = {"puesto": None, "sueldo": None, "num_empleados": None}
+    resultado = {"puesto": None, "sueldo": None, "sueldo_vacio": False, "num_empleados": None}
     mejor_puesto_score = 0
     mejor_sueldo_score = 0
+    mejor_sueldo_solo_nombre = 0  # Fallback: name match without value validation
 
     for col in df.columns:
         if str(col).lower().startswith("unnamed"):
@@ -103,24 +104,37 @@ def detectar_columnas(df):
                 resultado["puesto"] = col
 
         # --- SUELDO ---
+        # Step 1: Score by name match (always)
         score_s = 0
         for k in SUELDO_KEYS:
             if k in col_norm:
                 score_s += len(k) * 2
-        if score_s > mejor_sueldo_score and _es_columna_numerica(df, col):
-            # Filtro: mediana >= 500 (no tasas ni días)
-            try:
-                vals = pd.to_numeric(df[col], errors="coerce").dropna()
-                if len(vals) > 0 and vals.median() >= 500:
-                    mejor_sueldo_score = score_s
-                    resultado["sueldo"] = col
-            except Exception:
-                pass
+
+        if score_s > 0:
+            # Track best name-only match as fallback
+            if score_s > mejor_sueldo_solo_nombre:
+                mejor_sueldo_solo_nombre = score_s
+                _sueldo_fallback = col
+
+            # Step 2: Prefer columns with valid numeric data
+            if score_s > mejor_sueldo_score and _es_columna_numerica(df, col):
+                try:
+                    vals = pd.to_numeric(df[col], errors="coerce").dropna()
+                    if len(vals) > 0 and vals.median() >= 500:
+                        mejor_sueldo_score = score_s
+                        resultado["sueldo"] = col
+                except Exception:
+                    pass
 
         # --- NUM EMPLEADOS ---
         score_e = sum(len(k) for k in EMPLEADOS_KEYS if k in col_norm)
         if score_e > 0 and _es_columna_numerica(df, col):
             resultado["num_empleados"] = col
+
+    # Fallback: column name matched but values are empty/zero → accept with warning flag
+    if resultado["sueldo"] is None and mejor_sueldo_solo_nombre > 0:
+        resultado["sueldo"] = _sueldo_fallback
+        resultado["sueldo_vacio"] = True
 
     # Fallback puesto: si no se encontró, buscar columna con nombre/empleado/trabajador
     if resultado["puesto"] is None:
