@@ -27,7 +27,8 @@ KEYWORDS_PUESTO_LOW = ["categoria", "departamento", "area", "funcion"]
 KEYWORDS_PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado"]
 KEYWORDS_SUELDO = ["sueldo", "salario", "ingreso", "pago", "remuneracion", "percepcion",
                     "bruto", "neto", "liquido", "mensual", "deposito", "actual", "nuevo",
-                    "total deposito", "importe", "monto"]
+                    "total deposito", "importe", "monto",
+                    "neto real", "salario diario", "sueldo mensual", "asimilados", "fiscal"]
 KEYWORDS_EMPLEADOS = ["cantidad", "headcount", "num_empleados", "# empleados",
                        "numero de empleados", "qty"]
 

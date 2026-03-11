@@ -872,10 +872,10 @@ if tipo == "cotizador":
             return df_in
 
         def leer_excel_inteligente(archivo_xl, sheet_name):
-            """Prueba headers en filas 0-5 y elige el que produce mas columnas reconocibles."""
+            """Prueba headers en filas 0-7 y elige el que produce mas columnas reconocibles."""
             mejor_df = None
             mejor_score = -1
-            for header_row in range(6):
+            for header_row in range(8):
                 try:
                     candidate = pd.read_excel(archivo_xl, sheet_name=sheet_name, header=header_row)
                     candidate = candidate.dropna(how="all").reset_index(drop=True)
@@ -891,7 +891,7 @@ if tipo == "cotizador":
             """Prueba skiprows=0..5 y elige el header que produce mas columnas reconocibles."""
             mejor_df = None
             mejor_score = -1
-            for skip in range(6):
+            for skip in range(8):
                 try:
                     archivo_csv.seek(0)
                     candidate = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)
