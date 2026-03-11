@@ -67,9 +67,10 @@ def detectar_columnas(df):
     PUESTO_LOW  = ["categoria", "departamento", "area"]
     PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado", "banco", "cuenta", "clabe"]
 
-    SUELDO_KEYS = ["neto real mensual", "neto mensual", "sueldo neto", "salario neto",
+    SUELDO_KEYS = ["total deposito", "deposito total", "total a depositar", "neto real mensual",
+                   "neto mensual", "sueldo neto", "salario neto",
                    "bruto mensual", "sueldo bruto", "salario bruto", "deposito",
-                   "neto real", "percepcion neta", "total deposito", "importe neto",
+                   "neto real", "percepcion neta", "importe neto",
                    "neto quincenal", "neto semanal", "sueldo mensual", "ingreso mensual"]
 
     EMPLEADOS_KEYS = ["cantidad", "headcount", "num_empleados", "numero de empleados", "qty"]

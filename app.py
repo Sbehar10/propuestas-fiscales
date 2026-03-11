@@ -831,8 +831,11 @@ if tipo == "cotizador":
 
     if archivo is not None:
         # --- Lectura inteligente de archivos ---
-        COLS_PUESTO = ["puesto", "cargo", "plaza", "posicion", "rol"]
-        COLS_SUELDO = ["neto", "bruto", "salario", "sueldo", "deposito", "ingreso", "percepcion", "mensual", "quincenal", "importe"]
+        _KW_SUELDO = ["total deposito", "deposito", "neto real mensual", "neto mensual",
+                       "neto real", "neto quincenal", "sueldo", "salario", "bruto", "neto",
+                       "percepcion", "importe", "pago", "remuneracion", "monto"]
+        _KW_PUESTO = ["puesto", "cargo", "nombre", "empleado", "n°", "numero"]
+        _PESTANAS_IGNORAR = ["tabla", "tablas", "isr", "imss", "catalogo", "cat", "configuracion", "config"]
 
         def _fix_col_names(df_in):
             """Fix empty/NaN column names and deduplicate."""
@@ -854,51 +857,84 @@ if tipo == "cotizador":
             df_in.columns = deduped
             return df_in
 
-        def leer_excel_inteligente(archivo_xl, sheet_name=None):
-            """Prueba headers en filas 0-9 y elige el que produce mas columnas reconocibles."""
+        def leer_excel_inteligente(archivo_xl):
+            """Escanea TODAS las pestañas y headers 0-7 para elegir la mejor combinación."""
+            try:
+                archivo_xl.seek(0)
+                xl = pd.ExcelFile(archivo_xl)
+                sheet_names = xl.sheet_names
+            except Exception:
+                archivo_xl.seek(0)
+                return pd.read_excel(archivo_xl, header=0), ""
+
             mejor_df = None
             mejor_score = -1
-            for h in range(10):
-                try:
-                    archivo_xl.seek(0)
-                    kw = {"header": h}
-                    if sheet_name is not None:
-                        kw["sheet_name"] = sheet_name
-                    df = pd.read_excel(archivo_xl, **kw)
-                    cols_norm = [str(c).lower().strip() for c in df.columns]
+            mejor_info = ""
 
-                    tiene_puesto = any(any(k in c for k in COLS_PUESTO) for c in cols_norm if not c.startswith("unnamed"))
-                    tiene_sueldo = any(any(k in c for k in COLS_SUELDO) for c in cols_norm if not c.startswith("unnamed"))
+            for sheet in sheet_names:
+                sheet_norm = sheet.lower().strip()
+                if any(p in sheet_norm for p in _PESTANAS_IGNORAR):
+                    continue
 
-                    named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c != "none")
-                    score = named_cols + (10 if tiene_puesto else 0) + (10 if tiene_sueldo else 0)
+                for h in range(8):
+                    try:
+                        archivo_xl.seek(0)
+                        df = pd.read_excel(archivo_xl, sheet_name=sheet, header=h)
+                        cols_norm = [str(c).lower().strip() for c in df.columns]
 
-                    if score > mejor_score:
-                        mejor_score = score
-                        mejor_df = df.copy()
-                except Exception:
-                    pass
+                        tiene_sueldo = any(
+                            any(k in c for k in _KW_SUELDO)
+                            for c in cols_norm if not c.startswith("unnamed")
+                        )
+                        tiene_puesto = any(
+                            any(k in c for k in _KW_PUESTO)
+                            for c in cols_norm if not c.startswith("unnamed")
+                        )
+                        named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c not in ("none", "nan", ""))
+                        filas_datos = len(df.dropna(how="all"))
+
+                        score = named_cols + (20 if tiene_sueldo else 0) + (10 if tiene_puesto else 0) + min(filas_datos, 50)
+
+                        if score > mejor_score:
+                            mejor_score = score
+                            mejor_df = df.copy()
+                            mejor_info = f"Pestaña: '{sheet}' | Header fila: {h}"
+                    except Exception:
+                        pass
+
             try:
                 archivo_xl.seek(0)
             except Exception:
                 pass
-            return mejor_df if mejor_df is not None else pd.read_excel(archivo_xl, header=0)
+
+            if mejor_df is not None:
+                return mejor_df, mejor_info
+
+            archivo_xl.seek(0)
+            return pd.read_excel(archivo_xl, header=0), ""
 
         def leer_csv_inteligente(archivo_csv):
-            """Prueba skiprows=0..9 y elige el header que produce mas columnas reconocibles."""
+            """Prueba skiprows=0..7 y elige el header que produce mas columnas reconocibles."""
             mejor_df = None
             mejor_score = -1
-            for skip in range(10):
+            for skip in range(8):
                 try:
                     archivo_csv.seek(0)
                     df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)
                     cols_norm = [str(c).lower().strip() for c in df.columns]
 
-                    tiene_puesto = any(any(k in c for k in COLS_PUESTO) for c in cols_norm if not c.startswith("unnamed"))
-                    tiene_sueldo = any(any(k in c for k in COLS_SUELDO) for c in cols_norm if not c.startswith("unnamed"))
+                    tiene_sueldo = any(
+                        any(k in c for k in _KW_SUELDO)
+                        for c in cols_norm if not c.startswith("unnamed")
+                    )
+                    tiene_puesto = any(
+                        any(k in c for k in _KW_PUESTO)
+                        for c in cols_norm if not c.startswith("unnamed")
+                    )
+                    named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c not in ("none", "nan", ""))
+                    filas_datos = len(df.dropna(how="all"))
 
-                    named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c != "none")
-                    score = named_cols + (10 if tiene_puesto else 0) + (10 if tiene_sueldo else 0)
+                    score = named_cols + (20 if tiene_sueldo else 0) + (10 if tiene_puesto else 0) + min(filas_datos, 50)
 
                     if score > mejor_score:
                         mejor_score = score
@@ -918,19 +954,9 @@ if tipo == "cotizador":
             if archivo.name.endswith(".csv"):
                 df_raw = leer_csv_inteligente(archivo)
             else:
-                # Multi-sheet: let user pick sheet
-                archivo.seek(0)
-                xls = pd.ExcelFile(archivo)
-                sheet_names = xls.sheet_names
-                if len(sheet_names) > 1:
-                    sheet_sel = st.selectbox(
-                        "El archivo tiene varias hojas. Selecciona:",
-                        options=sheet_names,
-                        key="sheet_selector",
-                    )
-                else:
-                    sheet_sel = sheet_names[0]
-                df_raw = leer_excel_inteligente(archivo, sheet_name=sheet_sel)
+                df_raw, _info_sheet = leer_excel_inteligente(archivo)
+                if _info_sheet:
+                    st.info(f"📂 {_info_sheet}")
 
             df_raw = df_raw.dropna(how="all").reset_index(drop=True)
             df_raw = _fix_col_names(df_raw)
