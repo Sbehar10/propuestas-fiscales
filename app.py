@@ -963,17 +963,13 @@ if tipo == "cotizador":
 
         # --- Periodo de nomina (auto-detect sets default) ---
         st.markdown("#### Periodo de la nomina")
-        _opciones_periodo = ["Mensual", "Quincenal", "Catorcenal", "Semanal"]
-        _idx_periodo = {"mensual": 0, "quincenal": 1, "semanal": 3}.get(periodo, 0)
-        # Clear cached value so index from auto-detect takes effect
-        if "periodo_nomina" in st.session_state:
-            del st.session_state["periodo_nomina"]
+        _periodo_cap = {"quincenal": "Quincenal", "semanal": "Semanal", "mensual": "Mensual"}.get(periodo, "Mensual")
+        st.session_state["periodo_nomina"] = _periodo_cap
         periodo_nomina = st.radio(
             "Los sueldos del archivo son:",
-            options=_opciones_periodo,
-            index=_idx_periodo,
-            horizontal=True,
+            options=["Mensual", "Quincenal", "Catorcenal", "Semanal"],
             key="periodo_nomina",
+            horizontal=True,
         )
         multiplicadores_periodo = {
             "Mensual": 1.0,
@@ -1028,17 +1024,13 @@ if tipo == "cotizador":
 
         col1, col2 = st.columns(2)
         with col1:
-            opciones_bn = ["Bruto", "Neto"]
-            idx_bn = 1 if tipo_sueldo_detectado == "neto" else 0
-            # Clear cached value so index from auto-detect takes effect
-            if "tipo_sueldo" in st.session_state:
-                del st.session_state["tipo_sueldo"]
+            if tipo_sueldo_detectado != "desconocido":
+                st.session_state["tipo_sueldo"] = tipo_sueldo_detectado.capitalize()
             tipo_sueldo = st.radio(
                 "El sueldo del archivo es:",
-                options=opciones_bn,
-                index=idx_bn,
+                options=["Bruto", "Neto"],
+                key="tipo_sueldo",
                 horizontal=True,
-                key="tipo_sueldo"
             )
             if tipo_sueldo_detectado != "desconocido":
                 st.caption(f"Auto-detectado: **{tipo_sueldo_detectado}**")
