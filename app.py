@@ -835,7 +835,11 @@ if tipo == "cotizador":
                        "neto real", "neto quincenal", "sueldo", "salario", "bruto", "neto",
                        "percepcion", "importe", "pago", "remuneracion", "monto"]
         _KW_PUESTO = ["puesto", "cargo", "nombre", "empleado", "n°", "numero"]
-        _PESTANAS_IGNORAR = ["tabla", "tablas", "isr", "imss", "catalogo", "cat", "configuracion", "config"]
+        _PESTANAS_IGNORAR = [
+            "tabla", "tablas", "isr", "imss", "catalogo", "cat",
+            "configuracion", "config", "tarifa", "tarifas", "limite",
+            "sat", "parametros", "constantes",
+        ]
 
         def _fix_col_names(df_in):
             """Fix empty/NaN column names and deduplicate."""
@@ -957,6 +961,22 @@ if tipo == "cotizador":
                 df_raw, _info_sheet = leer_excel_inteligente(archivo)
                 if _info_sheet:
                     st.info(f"📂 {_info_sheet}")
+
+                # --- Manual sheet/header override ---
+                archivo.seek(0)
+                xl_override = pd.ExcelFile(archivo)
+                all_sheets = xl_override.sheet_names
+                if len(all_sheets) > 1:
+                    with st.expander("Seleccionar pestaña manualmente"):
+                        sel_sheet = st.selectbox("Pestaña", all_sheets,
+                                                 index=all_sheets.index(
+                                                     _info_sheet.split("'")[1]) if _info_sheet and "'" in _info_sheet and _info_sheet.split("'")[1] in all_sheets else 0)
+                        sel_header = st.number_input("Fila de encabezado", min_value=0, max_value=20, value=0)
+                        if st.button("Aplicar selección manual"):
+                            archivo.seek(0)
+                            df_raw = pd.read_excel(archivo, sheet_name=sel_sheet, header=sel_header)
+                            _info_sheet = f"Pestaña: '{sel_sheet}' | Header fila: {sel_header} (manual)"
+                            st.info(f"📂 {_info_sheet}")
 
             df_raw = df_raw.dropna(how="all").reset_index(drop=True)
             df_raw = _fix_col_names(df_raw)
