@@ -22,17 +22,6 @@ def _normalizar(texto):
 # ============================================================
 # DETECCIÓN AUTOMÁTICA DE COLUMNAS
 # ============================================================
-KEYWORDS_PUESTO_HIGH = ["puesto", "cargo", "posicion", "posición", "plaza", "rol"]
-KEYWORDS_PUESTO_LOW = ["categoria", "departamento", "area", "funcion"]
-KEYWORDS_PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado"]
-KEYWORDS_SUELDO = ["sueldo", "salario", "ingreso", "pago", "remuneracion", "percepcion",
-                    "bruto", "neto", "liquido", "mensual", "deposito", "actual", "nuevo",
-                    "total deposito", "importe", "monto",
-                    "neto real", "salario diario", "sueldo mensual", "asimilados", "fiscal"]
-KEYWORDS_EMPLEADOS = ["cantidad", "headcount", "num_empleados", "# empleados",
-                       "numero de empleados", "qty"]
-
-
 def _score_columna(col_normalizada, keywords):
     """Calcula score de coincidencia por substring"""
     score = 0
@@ -72,58 +61,62 @@ def _es_columna_texto(df, col, umbral=0.5):
 def detectar_columnas(df):
     """
     Auto-detecta columnas de puesto, sueldo y num_empleados.
-    - puesto: columna de texto con keywords de puesto
-    - sueldo: columna numérica (>50% valores numéricos) con keywords de sueldo
-    - num_empleados: solo si keyword explícita (empleados, cantidad, headcount)
     Retorna dict con las columnas encontradas (nombre original).
     """
+    PUESTO_HIGH = ["puesto", "cargo", "plaza", "posicion", "rol"]
+    PUESTO_LOW  = ["categoria", "departamento", "area"]
+    PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado", "banco", "cuenta", "clabe"]
+
+    SUELDO_KEYS = ["neto real mensual", "neto mensual", "sueldo neto", "salario neto",
+                   "bruto mensual", "sueldo bruto", "salario bruto", "deposito",
+                   "neto real", "percepcion neta", "total deposito", "importe neto",
+                   "neto quincenal", "neto semanal", "sueldo mensual", "ingreso mensual"]
+
+    EMPLEADOS_KEYS = ["cantidad", "headcount", "num_empleados", "numero de empleados", "qty"]
+
     resultado = {"puesto": None, "sueldo": None, "num_empleados": None}
-    scores = {"puesto": 0, "sueldo": 0, "num_empleados": 0}
+    mejor_puesto_score = 0
+    mejor_sueldo_score = 0
 
     for col in df.columns:
+        if str(col).lower().startswith("unnamed"):
+            continue
         col_norm = _normalizar(col)
 
-        # Score para puesto — solo columnas de texto, con exclusiones
-        if any(ex in col_norm for ex in KEYWORDS_PUESTO_EXCLUIR):
-            s_puesto = 0
+        # --- PUESTO ---
+        if any(ex in col_norm for ex in PUESTO_EXCLUIR):
+            pass  # skip
         else:
-            s_puesto = 0
-            for kw in KEYWORDS_PUESTO_HIGH:
-                if kw in col_norm:
-                    s_puesto += len(kw) * 2
-            for kw in KEYWORDS_PUESTO_LOW:
-                if kw in col_norm:
-                    s_puesto += len(kw)
-        if s_puesto > scores["puesto"] and _es_columna_texto(df, col):
-            scores["puesto"] = s_puesto
-            resultado["puesto"] = col
+            score = 0
+            for k in PUESTO_HIGH:
+                if k in col_norm:
+                    score += len(k) * 2
+            for k in PUESTO_LOW:
+                if k in col_norm:
+                    score += len(k)
+            if score > mejor_puesto_score and _es_columna_texto(df, col):
+                mejor_puesto_score = score
+                resultado["puesto"] = col
 
-        # Score para sueldo — solo columnas numéricas
-        s_sueldo = _score_columna(col_norm, KEYWORDS_SUELDO)
-        if s_sueldo > scores["sueldo"] and _es_columna_numerica(df, col):
-            # Filtro: mediana realista de sueldo
+        # --- SUELDO ---
+        score_s = 0
+        for k in SUELDO_KEYS:
+            if k in col_norm:
+                score_s += len(k) * 2
+        if score_s > mejor_sueldo_score and _es_columna_numerica(df, col):
+            # Filtro: mediana >= 500 (no tasas ni días)
             try:
                 vals = pd.to_numeric(df[col], errors="coerce").dropna()
-                if len(vals) > 0 and vals.median() < 500:
-                    continue  # Descartar columnas con valores muy bajos (factores, tasas, etc.)
+                if len(vals) > 0 and vals.median() >= 500:
+                    mejor_sueldo_score = score_s
+                    resultado["sueldo"] = col
             except Exception:
                 pass
-            scores["sueldo"] = s_sueldo
-            resultado["sueldo"] = col
 
-        # Score para num_empleados — solo keywords explícitas y numéricas
-        s_emp = _score_columna(col_norm, KEYWORDS_EMPLEADOS)
-        if s_emp > scores["num_empleados"] and _es_columna_numerica(df, col):
-            scores["num_empleados"] = s_emp
+        # --- NUM EMPLEADOS ---
+        score_e = sum(len(k) for k in EMPLEADOS_KEYS if k in col_norm)
+        if score_e > 0 and _es_columna_numerica(df, col):
             resultado["num_empleados"] = col
-
-    # Evitar que la misma columna se asigne a dos campos
-    asignadas = set()
-    for campo in ["puesto", "sueldo", "num_empleados"]:
-        if resultado[campo] in asignadas:
-            resultado[campo] = None
-        elif resultado[campo] is not None:
-            asignadas.add(resultado[campo])
 
     return resultado
 
