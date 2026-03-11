@@ -12,7 +12,8 @@ from motor_calculo import (
     calcular_sociedad_civil, calcular_grupo_nomina, neto_a_bruto
 )
 from procesador_nomina import (
-    detectar_columnas, detectar_bruto_neto, mapear_puestos, validar_datos
+    detectar_columnas, detectar_bruto_neto, detectar_periodo,
+    convertir_a_bruto_mensual, mapear_puestos, validar_datos
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
@@ -909,6 +910,9 @@ if tipo == "cotizador":
         # --- Column mapping ---
         st.markdown("#### Mapeo de columnas")
         cols_detectadas = detectar_columnas(df_raw)
+        periodo = detectar_periodo(df_raw)
+        tipo_salario = detectar_bruto_neto(df_raw, cols_detectadas.get("sueldo"))
+        st.info(f"📋 Detectado automáticamente: período **{periodo.upper()}** | salario **{tipo_salario.upper()}**")
         columnas_df = list(df_raw.columns)
 
         col1, col2, col3 = st.columns(3)
@@ -1191,14 +1195,12 @@ if tipo == "cotizador":
                     if n_emp <= 0:
                         continue
 
-                    # Apply period multiplier to get monthly amount
-                    sueldo = sueldo_raw * mult_periodo
+                    # Convert to monthly bruto using auto-detected period and salary type
+                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_raw, periodo, tipo_sueldo.lower())
+                    sueldo = sueldo_raw * mult_periodo  # Keep for display
 
                     if es_neto:
-                        sueldo_bruto = neto_a_bruto(sueldo, clase_riesgo_global, prima_riesgo_global)
                         conversiones_neto.append({"puesto": puesto_orig, "periodo": fmt_moneda(sueldo_raw), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
-                    else:
-                        sueldo_bruto = sueldo
 
                     info_puesto = mapeo_final.get(puesto_orig, {
                         "puesto_catalogo": "Otro (personalizado)",

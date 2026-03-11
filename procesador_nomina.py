@@ -111,6 +111,44 @@ def detectar_columnas(df):
 
 
 # ============================================================
+# DETECCIÓN DE PERÍODO DE NÓMINA
+# ============================================================
+FACTOR_PERIODO = {"quincenal": 2, "semanal": 4.33, "mensual": 1}
+KEYWORDS_QUINCENAL = ["quincenal", "quincena", "qna", "15 dias", "15dias"]
+KEYWORDS_SEMANAL   = ["semanal", "semana", "sem", "7 dias", "7dias"]
+KEYWORDS_MENSUAL   = ["mensual", "mes", "monthly"]
+
+def detectar_periodo(df):
+    cols_str = " ".join([_normalizar(str(c)) for c in df.columns])
+    for kw in KEYWORDS_QUINCENAL:
+        if kw in cols_str:
+            return "quincenal"
+    for kw in KEYWORDS_SEMANAL:
+        if kw in cols_str:
+            return "semanal"
+    for kw in KEYWORDS_MENSUAL:
+        if kw in cols_str:
+            return "mensual"
+    for col in df.columns:
+        if _es_columna_numerica(df, col):
+            try:
+                vals = pd.to_numeric(df[col], errors="coerce").dropna()
+                if len(vals) > 0 and vals.median() < SALARIO_MINIMO_MENSUAL * 0.7:
+                    return "quincenal"
+            except Exception:
+                pass
+    return "mensual"
+
+def convertir_a_bruto_mensual(valor, periodo, tipo_salario):
+    from motor_calculo import neto_a_bruto
+    factor = FACTOR_PERIODO.get(periodo, 1)
+    mensual = valor * factor
+    if tipo_salario == "neto":
+        return neto_a_bruto(mensual)
+    return mensual
+
+
+# ============================================================
 # DETECCIÓN BRUTO / NETO
 # ============================================================
 KEYWORDS_NETO = ["neto", "liquido", "líquido", "percepcion neta", "sueldo neto"]

@@ -290,7 +290,7 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
     """
     # Base nómina con piso en salario mínimo
     base_nomina = max(base_imss_mensual, SALARIO_MINIMO_MENSUAL)
-    if base_nomina > sueldo_bruto:
+    if sueldo_bruto < SALARIO_MINIMO_MENSUAL:
         base_nomina = sueldo_bruto
 
     salario_diario = base_nomina / dias
