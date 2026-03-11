@@ -962,21 +962,20 @@ if tipo == "cotizador":
                 if _info_sheet:
                     st.info(f"📂 {_info_sheet}")
 
-                # --- Manual sheet/header override ---
+                # --- Manual sheet override ---
                 archivo.seek(0)
-                xl_override = pd.ExcelFile(archivo)
-                all_sheets = xl_override.sheet_names
-                if len(all_sheets) > 1:
-                    with st.expander("Seleccionar pestaña manualmente"):
-                        sel_sheet = st.selectbox("Pestaña", all_sheets,
-                                                 index=all_sheets.index(
-                                                     _info_sheet.split("'")[1]) if _info_sheet and "'" in _info_sheet and _info_sheet.split("'")[1] in all_sheets else 0)
-                        sel_header = st.number_input("Fila de encabezado", min_value=0, max_value=20, value=0)
-                        if st.button("Aplicar selección manual"):
-                            archivo.seek(0)
-                            df_raw = pd.read_excel(archivo, sheet_name=sel_sheet, header=sel_header)
-                            _info_sheet = f"Pestaña: '{sel_sheet}' | Header fila: {sel_header} (manual)"
-                            st.info(f"📂 {_info_sheet}")
+                todas_hojas = pd.ExcelFile(archivo).sheet_names
+                if len(todas_hojas) > 1:
+                    hoja_override = st.selectbox(
+                        "¿Hoja correcta? (auto-detectada arriba)",
+                        options=["(usar auto-detección)"] + todas_hojas,
+                        index=0,
+                    )
+                    if hoja_override != "(usar auto-detección)":
+                        archivo.seek(0)
+                        df_raw = pd.read_excel(archivo, sheet_name=hoja_override, header=0)
+                        _info_sheet = f"Pestaña: '{hoja_override}' (manual)"
+                        st.info(f"📂 {_info_sheet}")
 
             df_raw = df_raw.dropna(how="all").reset_index(drop=True)
             df_raw = _fix_col_names(df_raw)
