@@ -954,6 +954,17 @@ if tipo == "cotizador":
             st.error("No se pudo detectar la columna de puesto. Verifica que tu archivo tenga una columna con nombres de puestos.")
             st.stop()
 
+        tipo_sueldo_detectado = detectar_bruto_neto(df_raw, col_sueldo)
+
+        # Reset radios cuando cambia el archivo
+        archivo_id = f"{archivo.name}_{archivo.size}"
+        if st.session_state.get("_ultimo_archivo") != archivo_id:
+            st.session_state["_ultimo_archivo"] = archivo_id
+            _periodo_cap = {"quincenal": "Quincenal", "semanal": "Semanal", "mensual": "Mensual"}.get(periodo, "Mensual")
+            st.session_state["periodo_nomina"] = _periodo_cap
+            st.session_state["tipo_sueldo"] = "Neto" if tipo_sueldo_detectado == "neto" else "Bruto"
+            st.rerun()
+
         cada_fila_un_empleado = col_empleados is None
 
         _msg_cols = f"Puesto → **{col_puesto}** | Sueldo → **{col_sueldo}**"
@@ -963,8 +974,6 @@ if tipo == "cotizador":
 
         # --- Periodo de nomina (auto-detect sets default) ---
         st.markdown("#### Periodo de la nomina")
-        _periodo_cap = {"quincenal": "Quincenal", "semanal": "Semanal", "mensual": "Mensual"}.get(periodo, "Mensual")
-        st.session_state["periodo_nomina"] = _periodo_cap
         periodo_nomina = st.radio(
             "Los sueldos del archivo son:",
             options=["Mensual", "Quincenal", "Catorcenal", "Semanal"],
@@ -1020,12 +1029,9 @@ if tipo == "cotizador":
 
         # --- Bruto / Neto ---
         st.markdown("#### Tipo de sueldo")
-        tipo_sueldo_detectado = detectar_bruto_neto(df_raw, col_sueldo)
 
         col1, col2 = st.columns(2)
         with col1:
-            if tipo_sueldo_detectado != "desconocido":
-                st.session_state["tipo_sueldo"] = tipo_sueldo_detectado.capitalize()
             tipo_sueldo = st.radio(
                 "El sueldo del archivo es:",
                 options=["Bruto", "Neto"],
