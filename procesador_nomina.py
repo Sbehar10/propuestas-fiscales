@@ -22,8 +22,9 @@ def _normalizar(texto):
 # ============================================================
 # DETECCIÓN AUTOMÁTICA DE COLUMNAS
 # ============================================================
-KEYWORDS_PUESTO = ["puesto", "cargo", "posicion", "posición", "rol", "funcion", "plaza",
-                    "categoria", "nombre", "clave", "departamento", "area"]
+KEYWORDS_PUESTO_HIGH = ["puesto", "cargo", "posicion", "posición", "plaza", "rol"]
+KEYWORDS_PUESTO_LOW = ["categoria", "departamento", "area", "funcion"]
+KEYWORDS_PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado"]
 KEYWORDS_SUELDO = ["sueldo", "salario", "ingreso", "pago", "remuneracion", "percepcion",
                     "bruto", "neto", "liquido", "mensual", "deposito", "actual", "nuevo",
                     "total deposito", "importe", "monto"]
@@ -81,8 +82,17 @@ def detectar_columnas(df):
     for col in df.columns:
         col_norm = _normalizar(col)
 
-        # Score para puesto — solo columnas de texto
-        s_puesto = _score_columna(col_norm, KEYWORDS_PUESTO)
+        # Score para puesto — solo columnas de texto, con exclusiones
+        if any(ex in col_norm for ex in KEYWORDS_PUESTO_EXCLUIR):
+            s_puesto = 0
+        else:
+            s_puesto = 0
+            for kw in KEYWORDS_PUESTO_HIGH:
+                if kw in col_norm:
+                    s_puesto += len(kw) * 2
+            for kw in KEYWORDS_PUESTO_LOW:
+                if kw in col_norm:
+                    s_puesto += len(kw)
         if s_puesto > scores["puesto"] and _es_columna_texto(df, col):
             scores["puesto"] = s_puesto
             resultado["puesto"] = col

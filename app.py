@@ -965,6 +965,9 @@ if tipo == "cotizador":
         st.markdown("#### Periodo de la nomina")
         _opciones_periodo = ["Mensual", "Quincenal", "Catorcenal", "Semanal"]
         _idx_periodo = {"mensual": 0, "quincenal": 1, "semanal": 3}.get(periodo, 0)
+        # Clear cached value so index from auto-detect takes effect
+        if "periodo_nomina" in st.session_state:
+            del st.session_state["periodo_nomina"]
         periodo_nomina = st.radio(
             "Los sueldos del archivo son:",
             options=_opciones_periodo,
@@ -1027,6 +1030,9 @@ if tipo == "cotizador":
         with col1:
             opciones_bn = ["Bruto", "Neto"]
             idx_bn = 1 if tipo_sueldo_detectado == "neto" else 0
+            # Clear cached value so index from auto-detect takes effect
+            if "tipo_sueldo" in st.session_state:
+                del st.session_state["tipo_sueldo"]
             tipo_sueldo = st.radio(
                 "El sueldo del archivo es:",
                 options=opciones_bn,
