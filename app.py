@@ -830,17 +830,25 @@ if tipo == "cotizador":
     st.markdown(f'<div class="progress-bar">{steps_html}</div>', unsafe_allow_html=True)
 
     if archivo is not None:
-        # Leer archivo — smart header detection (prueba header=0..3)
+        # --- Lectura inteligente de archivos ---
+        _KEYWORDS_HEADER = [
+            "puesto", "cargo", "sueldo", "salario", "neto", "bruto", "nombre",
+            "empleado", "imss", "total", "mensual", "quincenal", "deposito",
+            "dias", "sd", "ingreso", "percepcion", "director", "gerente",
+        ]
+
         def _score_header(df_candidate):
-            """Score a DataFrame by how many columns have recognizable text names."""
+            """Score a DataFrame by how many columns have recognizable names."""
             score = 0
             for c in df_candidate.columns:
-                s = str(c).strip()
-                if s and s.lower() != "nan" and not s.startswith("Unnamed"):
+                col_norm = str(c).lower().strip()
+                if any(kw in col_norm for kw in _KEYWORDS_HEADER):
+                    score += 1
+                if not col_norm.startswith("unnamed") and col_norm != "none" and col_norm != "nan":
                     try:
-                        float(s)
+                        float(col_norm)
                     except ValueError:
-                        score += 1  # Non-numeric, non-empty name
+                        score += 0.5
             return score
 
         def _fix_col_names(df_in):
@@ -863,29 +871,49 @@ if tipo == "cotizador":
             df_in.columns = deduped
             return df_in
 
+        def leer_excel_inteligente(archivo_xl, sheet_name):
+            """Prueba headers en filas 0-5 y elige el que produce mas columnas reconocibles."""
+            mejor_df = None
+            mejor_score = -1
+            for header_row in range(6):
+                try:
+                    candidate = pd.read_excel(archivo_xl, sheet_name=sheet_name, header=header_row)
+                    candidate = candidate.dropna(how="all").reset_index(drop=True)
+                    s = _score_header(candidate)
+                    if s > mejor_score:
+                        mejor_score = s
+                        mejor_df = candidate
+                except Exception:
+                    continue
+            return mejor_df if mejor_df is not None else pd.read_excel(archivo_xl, sheet_name=sheet_name, header=0)
+
+        def leer_csv_inteligente(archivo_csv):
+            """Prueba skiprows=0..5 y elige el header que produce mas columnas reconocibles."""
+            mejor_df = None
+            mejor_score = -1
+            for skip in range(6):
+                try:
+                    archivo_csv.seek(0)
+                    candidate = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)
+                    candidate = candidate.dropna(how="all").reset_index(drop=True)
+                    s = _score_header(candidate)
+                    if s > mejor_score:
+                        mejor_score = s
+                        mejor_df = candidate
+                except Exception:
+                    pass
+            if mejor_df is None:
+                try:
+                    archivo_csv.seek(0)
+                    mejor_df = pd.read_csv(archivo_csv, encoding="latin-1")
+                except Exception:
+                    archivo_csv.seek(0)
+                    mejor_df = pd.read_csv(archivo_csv)
+            return mejor_df
+
         try:
             if archivo.name.endswith(".csv"):
-                best_df = None
-                best_score = -1
-                for h in range(4):
-                    try:
-                        archivo.seek(0)
-                        candidate = pd.read_csv(archivo, encoding="utf-8", header=h)
-                        candidate = candidate.dropna(how="all").reset_index(drop=True)
-                        s = _score_header(candidate)
-                        if s > best_score:
-                            best_score = s
-                            best_df = candidate
-                    except Exception:
-                        pass
-                if best_df is None:
-                    try:
-                        archivo.seek(0)
-                        best_df = pd.read_csv(archivo, encoding="latin-1")
-                    except Exception:
-                        archivo.seek(0)
-                        best_df = pd.read_csv(archivo)
-                df_raw = best_df
+                df_raw = leer_csv_inteligente(archivo)
             else:
                 # Multi-sheet: let user pick sheet
                 archivo.seek(0)
@@ -899,23 +927,7 @@ if tipo == "cotizador":
                     )
                 else:
                     sheet_sel = sheet_names[0]
-
-                # Try header=0..3, pick the one with most recognizable column names
-                best_df = None
-                best_score = -1
-                for h in range(4):
-                    try:
-                        candidate = pd.read_excel(xls, sheet_name=sheet_sel, header=h)
-                        candidate = candidate.dropna(how="all").reset_index(drop=True)
-                        s = _score_header(candidate)
-                        if s > best_score:
-                            best_score = s
-                            best_df = candidate
-                    except Exception:
-                        pass
-                if best_df is None:
-                    best_df = pd.read_excel(xls, sheet_name=sheet_sel)
-                df_raw = best_df
+                df_raw = leer_excel_inteligente(xls, sheet_sel)
 
             df_raw = df_raw.dropna(how="all").reset_index(drop=True)
             df_raw = _fix_col_names(df_raw)
