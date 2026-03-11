@@ -870,7 +870,7 @@ if tipo == "cotizador":
             return df_in
 
         def leer_excel_inteligente(archivo_xl):
-            """Escanea TODAS las pestañas y headers 0-7 para elegir la mejor combinación."""
+            """Escanea TODAS las pestañas y headers 0-10 para elegir la mejor combinación."""
             try:
                 archivo_xl.seek(0)
                 xl = pd.ExcelFile(archivo_xl)
@@ -888,7 +888,7 @@ if tipo == "cotizador":
                 if any(p in sheet_norm for p in _PESTANAS_IGNORAR):
                     continue
 
-                for h in range(8):
+                for h in range(11):
                     try:
                         archivo_xl.seek(0)
                         df = pd.read_excel(archivo_xl, sheet_name=sheet, header=h)
@@ -926,10 +926,10 @@ if tipo == "cotizador":
             return pd.read_excel(archivo_xl, header=0), ""
 
         def leer_csv_inteligente(archivo_csv):
-            """Prueba skiprows=0..7 y elige el header que produce mas columnas reconocibles."""
+            """Prueba skiprows=0..10 y elige el header que produce mas columnas reconocibles."""
             mejor_df = None
             mejor_score = -1
-            for skip in range(8):
+            for skip in range(11):
                 try:
                     archivo_csv.seek(0)
                     df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)

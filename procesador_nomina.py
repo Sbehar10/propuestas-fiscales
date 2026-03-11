@@ -20,6 +20,31 @@ def _normalizar(texto):
 
 
 # ============================================================
+# DETECCIÓN DINÁMICA DE FILA DE ENCABEZADO
+# ============================================================
+_HEADER_KEYS = [
+    "puesto", "nombre", "sueldo", "neto", "salario", "deposito",
+    "dias", "clave", "sd", "mensual", "bruto", "cargo", "empleado",
+    "percepcion", "importe", "pago", "remuneracion", "monto",
+]
+
+
+def detectar_fila_header(df_raw, max_filas=11, min_matches=2):
+    """
+    Escanea las primeras *max_filas* filas de un DataFrame leído SIN header
+    y retorna el índice de la primera fila que contiene >= min_matches keywords.
+    Retorna 0 si ninguna fila califica.
+    """
+    for i in range(min(max_filas, len(df_raw))):
+        fila = df_raw.iloc[i]
+        textos = " ".join(_normalizar(str(v)) for v in fila if pd.notna(v))
+        matches = sum(1 for kw in _HEADER_KEYS if kw in textos)
+        if matches >= min_matches:
+            return i
+    return 0
+
+
+# ============================================================
 # DETECCIÓN AUTOMÁTICA DE COLUMNAS
 # ============================================================
 def _score_columna(col_normalizada, keywords):
@@ -137,7 +162,7 @@ def detectar_columnas(df):
 
     # Fallback puesto: si no se encontró, buscar columna con nombre/empleado/trabajador
     if resultado["puesto"] is None:
-        PUESTO_FALLBACK = ["nombre", "empleado", "trabajador", "personal"]
+        PUESTO_FALLBACK = ["puesto", "nombre", "empleado", "trabajador", "personal"]
         for col in df.columns:
             if str(col).lower().startswith("unnamed"):
                 continue
