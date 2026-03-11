@@ -104,27 +104,26 @@ def detectar_columnas(df):
                 resultado["puesto"] = col
 
         # --- SUELDO ---
-        # Step 1: Score by name match (always)
-        score_s = 0
-        for k in SUELDO_KEYS:
-            if k in col_norm:
-                score_s += len(k) * 2
+        # Score by name match + valid numeric count
+        name_score = sum(len(k) * 2 for k in SUELDO_KEYS if k in col_norm)
 
-        if score_s > 0:
-            # Track best name-only match as fallback
-            if score_s > mejor_sueldo_solo_nombre:
-                mejor_sueldo_solo_nombre = score_s
+        if name_score > 0:
+            try:
+                valid_count = int(pd.to_numeric(df[col], errors="coerce").dropna().ge(10).sum())
+            except Exception:
+                valid_count = 0
+
+            total_score = name_score + valid_count
+
+            # Track best name-only match as fallback (for empty columns)
+            if name_score > mejor_sueldo_solo_nombre:
+                mejor_sueldo_solo_nombre = name_score
                 _sueldo_fallback = col
 
-            # Step 2: Prefer columns with valid numeric data
-            if score_s > mejor_sueldo_score and _es_columna_numerica(df, col):
-                try:
-                    vals = pd.to_numeric(df[col], errors="coerce").dropna()
-                    if len(vals) > 0 and vals.median() >= 500:
-                        mejor_sueldo_score = score_s
-                        resultado["sueldo"] = col
-                except Exception:
-                    pass
+            # Combined score determines winner
+            if total_score > mejor_sueldo_score and valid_count > 0:
+                mejor_sueldo_score = total_score
+                resultado["sueldo"] = col
 
         # --- NUM EMPLEADOS ---
         score_e = sum(len(k) for k in EMPLEADOS_KEYS if k in col_norm)
