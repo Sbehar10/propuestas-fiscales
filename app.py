@@ -717,9 +717,10 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                         <p>{fmt_tarjeta(r["irt"]["base_nomina"])}</p>
                         <p class="sub">{fmt_moneda(r["irt"]["base_nomina"])}</p>
                     </div>""", unsafe_allow_html=True)
+                _ahorro_class = "ahorro-verde" if r["ahorro_mensual"] > 0 else "metric-card"
                 with c4:
                     st.markdown(f"""
-                    <div class="ahorro-verde">
+                    <div class="{_ahorro_class}">
                         <h3>Ahorro / mes</h3>
                         <p>{fmt_tarjeta(r["ahorro_mensual"])}</p>
                         <p class="sub">{fmt_moneda(r["ahorro_mensual"])}</p>
@@ -740,9 +741,10 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
                         <p>{fmt_tarjeta(r["irt"]["base_nomina"])}</p>
                         <p class="sub">{fmt_moneda(r["irt"]["base_nomina"])}</p>
                     </div>""", unsafe_allow_html=True)
+                _ahorro_class = "ahorro-verde" if r["ahorro_mensual"] > 0 else "metric-card"
                 with c3:
                     st.markdown(f"""
-                    <div class="ahorro-verde">
+                    <div class="{_ahorro_class}">
                         <h3>Ahorro / mes</h3>
                         <p>{fmt_tarjeta(r["ahorro_mensual"])}</p>
                         <p class="sub">{fmt_moneda(r["ahorro_mensual"])}</p>
@@ -757,6 +759,11 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
 
             # Comparison table
             st.markdown(tabla_comparativa_irt(r), unsafe_allow_html=True)
+
+    # Info note for sub-minimum salary employees
+    n_bajo_minimo = sum(1 for r in resultados_grupos if r["sueldo_bruto"] < SALARIO_MINIMO_MENSUAL)
+    if n_bajo_minimo > 0:
+        st.info(f"{n_bajo_minimo} empleado(s) con sueldo menor al minimo profesional — cotizados sobre su sueldo real. El esquema IRT no genera ahorro en estos casos.")
 
     # === DESCARGAS ===
     st.markdown("---")
@@ -1248,8 +1255,8 @@ if tipo == "cotizador":
                 if "_ingreso_exento" not in df_trabajo.columns:
                     df_trabajo["_ingreso_exento"] = 0
 
-                # Filtrar filas con sueldo <= 0 o puesto vacío antes de agrupar
-                df_trabajo = df_trabajo[df_trabajo[col_sueldo] > 0].copy()
+                # Filtrar filas con sueldo < 10 (template garbage) o puesto vacío antes de agrupar
+                df_trabajo = df_trabajo[df_trabajo[col_sueldo] >= 10].copy()
                 _puestos_str = _safe_series(df_trabajo, col_puesto).astype(str).str.strip()
                 df_trabajo = df_trabajo[_puestos_str.ne("") & _puestos_str.str.lower().ne("nan")]
 
