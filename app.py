@@ -1684,7 +1684,7 @@ elif tipo == "sc":
         col_sc1, col_sc2 = st.columns(2)
         with col_sc1:
             st.markdown("**Retencion ISR**")
-            pct_anticipo = st.radio("% Anticipo por remanente", options=[10, 20], horizontal=True, key="pct_ant")
+            pct_anticipo = st.radio("% Anticipo por remanente", options=[10, 20, 50], horizontal=True, key="pct_ant")
         with col_sc2:
             st.markdown("**Modo de captura**")
             modo_sc = st.radio(

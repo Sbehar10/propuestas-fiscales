@@ -490,15 +490,17 @@ def neto_a_bruto(neto_deseado, clase_riesgo="I", prima_riesgo=None):
 
 
 def _piramidar_sc(neto_deseado, pct_anticipo, comision_pct):
-    """Calcula ingreso bruto necesario para lograr neto deseado en SC (bisección)"""
+    """Calcula ingreso bruto necesario para lograr neto deseado en SC (bisección).
+    f(bruto) = (bruto×pct% - isr(bruto×pct%)) + bruto×(100-pct)% - neto_deseado
+    Tolerancia: $0.01"""
     low, high = neto_deseado, neto_deseado * 3
-    for _ in range(100):
+    for _ in range(200):
         mid = (low + high) / 2
         anticipo = mid * (pct_anticipo / 100)
         renta = mid - anticipo
         isr = calcular_isr(anticipo)
         neto = (anticipo - isr["isr_neto"]) + renta
-        if abs(neto - neto_deseado) < 0.50:
+        if abs(neto - neto_deseado) < 0.01:
             return round(mid, 2)
         elif neto < neto_deseado:
             low = mid
