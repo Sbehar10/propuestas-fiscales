@@ -541,6 +541,7 @@ def tabla_comparativa_irt(r):
     rows += [
         ("Base nomina (IMSS)", act["sueldo_bruto"], irt["base_nomina"]),
         ("ISR Art. 96", act["isr"]["isr_neto"], irt["isr"]["isr_neto"]),
+        ("IMSS obrero (descuento)", act["imss_obrero"]["total"], irt["imss_obrero"]["total"]),
         ("IMSS patronal", act["imss_patronal"]["total"], irt["imss_patronal"]["total"]),
         ("Infonavit", act["infonavit"], irt["infonavit"]),
         ("ISN", act["isn"], irt["isn"]),
