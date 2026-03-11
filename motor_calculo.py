@@ -288,10 +288,8 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
       COMISION = (NOMINA + CARGAS) * %
       TOTAL FACTURA = (NOMINA + CARGAS + COMISION) * 1.16
     """
-    # Base nómina con piso en salario mínimo
-    base_nomina = max(base_imss_mensual, SALARIO_MINIMO_MENSUAL)
-    if sueldo_bruto < SALARIO_MINIMO_MENSUAL:
-        base_nomina = sueldo_bruto
+    # Base nómina: piso en salario mínimo, techo en sueldo bruto real
+    base_nomina = min(max(base_imss_mensual, SALARIO_MINIMO_MENSUAL), sueldo_bruto)
 
     salario_diario = base_nomina / dias
 
