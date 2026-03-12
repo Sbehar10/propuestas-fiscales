@@ -1497,12 +1497,18 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if n_emp <= 0:
                         continue
 
+                    # Add additional income (PPS/IRT/exento) to neto BEFORE bruto conversion
+                    # so the total deposit is what gets grossed up
+                    exento_por_emp = fila.get("exento_promedio", 0) or 0
+                    ingreso_adicional_periodo = exento_por_emp  # per-period value
+                    sueldo_total_raw = sueldo_raw + ingreso_adicional_periodo
+
                     # Convert to monthly bruto using auto-detected period and salary type
-                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_raw, periodo, tipo_sueldo.lower())
-                    sueldo = sueldo_raw * mult_periodo  # Keep for display
+                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_total_raw, periodo, tipo_sueldo.lower())
+                    sueldo = sueldo_total_raw * mult_periodo  # Keep for display (total neto monthly)
 
                     if es_neto:
-                        conversiones_neto.append({"puesto": puesto_orig, "periodo": fmt_moneda(sueldo_raw), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
+                        conversiones_neto.append({"puesto": puesto_orig, "base": fmt_moneda(sueldo_raw), "adicional": fmt_moneda(ingreso_adicional_periodo), "neto_total": fmt_moneda(sueldo_total_raw), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
 
                     info_puesto = mapeo_final.get(puesto_orig, {
                         "puesto_catalogo": "Otro (personalizado)",
@@ -1535,17 +1541,9 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if es_neto:
                         r["sueldo_neto_original"] = sueldo
 
-                    # Add exento income to actual cost (no cargas, just cost)
-                    exento_por_emp = fila.get("exento_promedio", 0)
-                    if exento_por_emp and exento_por_emp > 0:
-                        exento_mensual = exento_por_emp * mult_periodo
-                        r["actual"]["costo_total"] += exento_mensual * n_emp
-                        r["actual"]["costo_por_empleado"] += exento_mensual
-                        r["sueldo_bruto"] += exento_mensual
-                        r["ingreso_exento_adicional"] = exento_mensual
-                        # Recalcular ahorro
-                        r["ahorro_mensual"] = r["actual"]["costo_total"] - (r["irt"]["subtotal_factura"] * n_emp)
-                        r["ahorro_anual"] = r["ahorro_mensual"] * 12
+                    # Track additional income for display
+                    if ingreso_adicional_periodo > 0:
+                        r["ingreso_exento_adicional"] = ingreso_adicional_periodo * mult_periodo
 
                     resultados_grupos.append(r)
 
@@ -1558,7 +1556,7 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if conversiones_neto:
                         st.markdown('<div class="section-header"><h3>Conversion Neto a Bruto</h3></div>', unsafe_allow_html=True)
                         df_conv = pd.DataFrame(conversiones_neto)
-                        df_conv.columns = ["Puesto", "Sueldo Periodo", "Mensual Estimado", "Bruto Estimado", "Empleados"]
+                        df_conv.columns = ["Puesto", "Base Neto", "Ingreso Adicional", "Neto Total", "Mensual", "Bruto Estimado", "Empleados"]
                         st.dataframe(df_conv, use_container_width=True, hide_index=True)
 
                     # Show auto-adjusted base IMSS warnings
