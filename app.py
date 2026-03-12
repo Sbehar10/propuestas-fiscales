@@ -41,104 +41,127 @@ st.set_page_config(
 # === ESTILOS CSS ===
 st.markdown("""
 <style>
-    /* --- Header banner --- */
-    .main-header {
-        background: linear-gradient(135deg, #1B3A5C 0%, #2C5F8A 100%);
-        padding: 2.2rem 2rem;
-        border-radius: 8px;
-        margin-bottom: 2rem;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(27,58,92,0.15);
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* --- Page background --- */
+    .stApp {
+        background-color: #F8F7F4 !important;
     }
-    .main-header h1 {
-        color: #FFFFFF !important;
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
-        margin: 0 !important;
-        letter-spacing: 0.3px;
+    section[data-testid="stSidebar"] {
+        background-color: #F0EFE9 !important;
+        border-right: 1px solid #E5E3DB;
     }
-    .main-header .accent {
-        color: #C9A962 !important;
-    }
-    .main-header p {
-        color: rgba(255,255,255,0.75) !important;
-        font-size: 0.9rem;
-        font-weight: 400;
-        margin: 0.4rem 0 0 0;
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stMarkdown label {
+        color: #0D1B2A !important;
     }
 
-    /* --- Section headers --- */
+    /* --- Masthead --- */
+    .masthead {
+        background: #0D1B2A;
+        padding: 1.3rem 2.5rem;
+        margin: -1rem -1rem 0 -1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 3px solid #C9A84C;
+    }
+    .masthead-brand {
+        font-family: 'Playfair Display', Georgia, serif;
+        font-size: 1.65rem;
+        font-weight: 700;
+        color: #C9A84C !important;
+        letter-spacing: 2px;
+        margin: 0;
+    }
+    .masthead-sub {
+        font-family: 'Inter', -apple-system, sans-serif;
+        font-size: 0.72rem;
+        color: rgba(255,255,255,0.6) !important;
+        text-transform: uppercase;
+        letter-spacing: 2.5px;
+        font-weight: 500;
+        margin: 0;
+    }
+
+    /* --- Section headers (serif + gold underline) --- */
     .section-header {
         background: transparent;
-        padding: 0 0 0.5rem 0;
-        border-bottom: 2px solid #E2E8F0;
-        margin: 1.8rem 0 1rem 0;
+        padding: 0 0 0.6rem 0;
+        border-bottom: 2px solid #C9A84C;
+        margin: 2rem 0 1.2rem 0;
     }
     .section-header h3 {
-        color: #1B3A5C !important;
+        font-family: 'Playfair Display', Georgia, serif !important;
+        color: #0D1B2A !important;
         margin: 0 !important;
-        font-size: 1.05rem !important;
+        font-size: 1.15rem !important;
         font-weight: 600 !important;
-        letter-spacing: 0.2px;
+        letter-spacing: 0.3px;
     }
 
     /* --- Metric cards --- */
     .metric-card {
         background: #FFFFFF;
-        padding: 1.4rem 1.2rem;
-        border-radius: 8px;
+        padding: 1.5rem 1.2rem;
+        border-radius: 4px;
         text-align: center;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        border: 1px solid #E5E3DB;
+        border-left: 4px solid #C9A84C;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         margin-bottom: 0.5rem;
     }
     .metric-card h3 {
-        color: #718096 !important;
-        font-size: 0.7rem !important;
+        font-family: 'Inter', sans-serif !important;
+        color: #6B7280 !important;
+        font-size: 0.68rem !important;
         font-weight: 600 !important;
         margin: 0 !important;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
+        letter-spacing: 1px;
     }
     .metric-card p {
-        color: #1B3A5C !important;
+        font-family: 'Inter', sans-serif !important;
+        color: #0D1B2A !important;
         font-size: 1.7rem !important;
         font-weight: 700 !important;
         margin: 0.4rem 0 0 0 !important;
     }
     .metric-card .sub {
-        color: #A0AEC0 !important;
+        color: #6B7280 !important;
         font-size: 0.72rem !important;
         font-weight: 400 !important;
         margin: 0.15rem 0 0 0 !important;
     }
 
-    /* --- Ahorro cards (soft green) --- */
+    /* --- Ahorro cards (success) --- */
     .ahorro-verde {
-        background: #E8F5E9;
-        padding: 1.4rem 1.2rem;
-        border-radius: 8px;
+        background: #FFFFFF;
+        padding: 1.5rem 1.2rem;
+        border-radius: 4px;
         text-align: center;
-        border: 1px solid #C8E6C9;
-        box-shadow: 0 1px 4px rgba(39,174,96,0.08);
+        border: 1px solid #BBF7D0;
+        border-left: 4px solid #16A34A;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         margin-bottom: 0.5rem;
     }
     .ahorro-verde h3 {
-        color: #2E7D32 !important;
-        font-size: 0.7rem !important;
+        font-family: 'Inter', sans-serif !important;
+        color: #166534 !important;
+        font-size: 0.68rem !important;
         font-weight: 600 !important;
         margin: 0 !important;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
+        letter-spacing: 1px;
     }
     .ahorro-verde p {
-        color: #1B5E20 !important;
+        color: #15803D !important;
         font-size: 1.7rem !important;
         font-weight: 700 !important;
         margin: 0.4rem 0 0 0 !important;
     }
     .ahorro-verde .sub {
-        color: #4CAF50 !important;
+        color: #16A34A !important;
         font-size: 0.72rem !important;
         font-weight: 400 !important;
     }
@@ -146,24 +169,25 @@ st.markdown("""
     /* --- Estado badge --- */
     .estado-badge {
         display: inline-block;
-        background: #F7F1E0;
-        color: #8B6914 !important;
+        background: #FEF9EE;
+        color: #92400E !important;
         padding: 0.25rem 0.7rem;
-        border-radius: 4px;
+        border-radius: 3px;
         font-size: 0.78rem;
         font-weight: 600;
         margin-top: 0.3rem;
-        border: 1px solid #E8D9A8;
+        border: 1px solid #C9A84C;
     }
 
-    /* --- Progress bar (cotizador) --- */
+    /* --- Progress bar --- */
     .progress-bar {
         display: flex;
         justify-content: space-between;
         margin: 0.8rem 0 1.5rem 0;
         padding: 0;
-        background: #F7FAFC;
-        border-radius: 6px;
+        background: #FFFFFF;
+        border-radius: 4px;
+        border: 1px solid #E5E3DB;
     }
     .progress-step {
         flex: 1;
@@ -172,16 +196,18 @@ st.markdown("""
         font-size: 0.73rem;
         font-weight: 600;
         color: #CBD5E0;
-        border-bottom: 3px solid #E2E8F0;
+        border-bottom: 3px solid #E5E3DB;
         transition: all 0.2s ease;
+        font-family: 'Inter', sans-serif;
     }
     .progress-step.active {
-        color: #1B3A5C;
-        border-bottom-color: #C9A962;
+        color: #0D1B2A;
+        border-bottom-color: #C9A84C;
+        background: #FEF9EE;
     }
     .progress-step.done {
-        color: #2E7D32;
-        border-bottom-color: #27AE60;
+        color: #166534;
+        border-bottom-color: #16A34A;
     }
 
     /* --- Buttons --- */
@@ -189,15 +215,17 @@ st.markdown("""
         width: 100%;
     }
     .stButton>button[kind="primary"] {
-        background-color: #1B3A5C !important;
-        color: #FFFFFF !important;
+        background-color: #0D1B2A !important;
+        color: #C9A84C !important;
         border: none !important;
         font-weight: 600 !important;
-        border-radius: 6px !important;
+        border-radius: 4px !important;
+        letter-spacing: 0.5px;
+        font-family: 'Inter', sans-serif !important;
     }
     .stButton>button[kind="primary"]:hover {
-        background-color: #C9A962 !important;
-        color: #1B3A5C !important;
+        background-color: #1a2d45 !important;
+        color: #E5C76B !important;
     }
 
     /* --- Comparison table --- */
@@ -206,44 +234,69 @@ st.markdown("""
         border-collapse: collapse;
         font-size: 0.88rem;
         margin: 0.8rem 0;
+        font-family: 'Inter', sans-serif;
     }
     .comp-table th {
-        background: #1B3A5C;
+        background: #0D1B2A;
         color: #FFFFFF;
-        padding: 0.6rem 0.8rem;
+        padding: 0.65rem 0.8rem;
         text-align: left;
         font-weight: 600;
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.7px;
     }
     .comp-table td {
         padding: 0.5rem 0.8rem;
-        border-bottom: 1px solid #E2E8F0;
-        color: #2D3748;
+        border-bottom: 1px solid #E5E3DB;
+        color: #374151;
     }
     .comp-table tr:nth-child(even) {
-        background: #F7FAFC;
+        background: #F8F7F4;
+    }
+    .comp-table tr:nth-child(odd) {
+        background: #FFFFFF;
     }
     .comp-table .num {
         text-align: right;
         font-variant-numeric: tabular-nums;
     }
     .comp-table .ahorro-row td {
-        background: #E8F5E9;
+        background: #F0FDF4;
         font-weight: 700;
-        color: #1B5E20;
+        color: #166534;
+    }
+
+    /* --- General text styling --- */
+    .stMarkdown p, .stMarkdown li {
+        font-family: 'Inter', -apple-system, sans-serif;
+        color: #374151;
+    }
+    h1, h2, h3 {
+        font-family: 'Playfair Display', Georgia, serif !important;
+        color: #0D1B2A !important;
+    }
+
+    /* --- Streamlit table overrides --- */
+    .stDataFrame th {
+        background-color: #0D1B2A !important;
+        color: #FFFFFF !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# === HEADER ===
+# === MASTHEAD ===
 st.markdown("""
-<div class="main-header">
-    <h1>Sistema de Cotizacion <span class="accent">Fiscal</span></h1>
-    <p>Cotizacion y generacion de propuestas para clientes &mdash; Ano fiscal 2026</p>
+<div class="masthead">
+    <p class="masthead-brand">BEHAR FISCAL</p>
+    <p class="masthead-sub">Optimizaci&oacute;n Fiscal Empresarial 2026</p>
 </div>
 """, unsafe_allow_html=True)
+st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
 
 # ============================================================
