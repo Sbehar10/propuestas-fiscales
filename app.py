@@ -12,7 +12,7 @@ from motor_calculo import (
     calcular_sociedad_civil, calcular_grupo_nomina, neto_a_bruto
 )
 from procesador_nomina import (
-    detectar_columnas, detectar_bruto_neto, detectar_periodo,
+    detectar_fila_header, detectar_columnas, detectar_bruto_neto, detectar_periodo,
     convertir_a_bruto_mensual, limpiar_filas_resumen, mapear_puestos, validar_datos
 )
 from generador_word import generar_propuesta_word, fmt_moneda
@@ -907,7 +907,7 @@ if tipo == "cotizador":
                 if any(p in sheet_norm for p in _PESTANAS_IGNORAR):
                     continue
 
-                for h in range(11):
+                for h in range(21):
                     try:
                         archivo_xl.seek(0)
                         df = pd.read_excel(archivo_xl, sheet_name=sheet, header=h)
@@ -948,7 +948,7 @@ if tipo == "cotizador":
             """Prueba skiprows=0..10 y elige el header que produce mas columnas reconocibles."""
             mejor_df = None
             mejor_score = -1
-            for skip in range(11):
+            for skip in range(21):
                 try:
                     archivo_csv.seek(0)
                     df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)
@@ -981,6 +981,8 @@ if tipo == "cotizador":
                     mejor_df = pd.read_csv(archivo_csv)
             return mejor_df
 
+        _info_sheet = ""
+        _header_encontrado = True
         try:
             if archivo.name.endswith(".csv"):
                 df_raw = leer_csv_inteligente(archivo)
@@ -989,20 +991,26 @@ if tipo == "cotizador":
                 if _info_sheet:
                     st.info(f"📂 {_info_sheet}")
 
-                # --- Manual sheet override ---
+                # --- Sheet selector ---
                 archivo.seek(0)
                 todas_hojas = pd.ExcelFile(archivo).sheet_names
                 if len(todas_hojas) > 1:
-                    hoja_override = st.selectbox(
-                        "¿Hoja correcta? (auto-detectada arriba)",
-                        options=["(usar auto-detección)"] + todas_hojas,
+                    hoja_sel = st.selectbox(
+                        "Selecciona la hoja",
+                        options=["(Auto-detectar)"] + todas_hojas,
                         index=0,
+                        key="hoja_selector",
                     )
-                    if hoja_override != "(usar auto-detección)":
+                    if hoja_sel != "(Auto-detectar)":
                         archivo.seek(0)
-                        df_raw = pd.read_excel(archivo, sheet_name=hoja_override, header=0)
-                        _info_sheet = f"Pestaña: '{hoja_override}' (manual)"
+                        df_sheet_raw = pd.read_excel(archivo, sheet_name=hoja_sel, header=None)
+                        header_row, _header_encontrado = detectar_fila_header(df_sheet_raw)
+                        archivo.seek(0)
+                        df_raw = pd.read_excel(archivo, sheet_name=hoja_sel, header=header_row)
+                        _info_sheet = f"Pestaña: '{hoja_sel}' (manual) | Header fila: {header_row}"
                         st.info(f"📂 {_info_sheet}")
+                        if not _header_encontrado:
+                            st.warning("No se detectó fila de encabezado con certeza. Se usó la fila 0. Verifica la vista previa.")
 
             df_raw = df_raw.dropna(how="all").reset_index(drop=True)
             df_raw = _fix_col_names(df_raw)
@@ -1035,8 +1043,19 @@ if tipo == "cotizador":
         col_empleados = cols_detectadas["num_empleados"]
 
         if col_sueldo is None:
-            st.error("No se detecto columna de sueldo. Verifica que tu archivo tenga una columna con montos de nomina.")
-            st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
+            st.error(f"""No se detectó columna de sueldo.
+
+Lo que detectamos:
+- Info: {_info_sheet or 'N/A'}
+- Columnas encontradas: {', '.join(str(c) for c in df_raw.columns if not str(c).lower().startswith('unnamed'))}
+- Filas totales: {len(df_raw)}
+
+Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con montos de nómina.""")
+            with st.expander("🔍 Debug: detección de estructura", expanded=False):
+                st.write(f"Info hoja: {_info_sheet or 'N/A'}")
+                st.write(f"Columnas: {list(df_raw.columns)}")
+                st.write(f"Filas: {len(df_raw)}")
+                st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
             st.stop()
 
         if cols_detectadas.get("sueldo_vacio"):
@@ -1167,7 +1186,24 @@ if tipo == "cotizador":
                 st.info(f"Se eliminaron **{filas_eliminadas}** fila(s) de totales/sumas detectadas.")
 
             if len(df_trabajo) == 0:
-                st.error("No se encontraron filas con valores numericos validos en la columna de sueldo.")
+                sueldos_raw = pd.to_numeric(df_raw[col_sueldo], errors="coerce").dropna()
+                filas_gt10 = int(sueldos_raw.ge(10).sum())
+                st.error(f"""No se encontraron empleados en la hoja.
+
+Lo que detectamos:
+- Info: {_info_sheet or 'N/A'}
+- Columna de sueldo: {col_sueldo}
+- Columna de puesto: {col_puesto}
+- Filas totales: {len(df_raw)}
+- Filas con sueldo >= 10: {filas_gt10}
+
+Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con montos de nómina.""")
+                with st.expander("🔍 Debug: detección de estructura", expanded=False):
+                    st.write(f"Info hoja: {_info_sheet or 'N/A'}")
+                    st.write(f"Columna sueldo: {col_sueldo}")
+                    st.write(f"Columna puesto: {col_puesto}")
+                    st.write(f"Empleados válidos: 0")
+                    st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
                 st.stop()
 
             df_mapeo = mapear_puestos(_safe_series(df_trabajo, col_puesto))

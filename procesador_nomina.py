@@ -22,26 +22,52 @@ def _normalizar(texto):
 # ============================================================
 # DETECCIÓN DINÁMICA DE FILA DE ENCABEZADO
 # ============================================================
-_HEADER_KEYS = [
-    "puesto", "nombre", "sueldo", "neto", "salario", "deposito",
-    "dias", "clave", "sd", "mensual", "bruto", "cargo", "empleado",
-    "percepcion", "importe", "pago", "remuneracion", "monto",
-]
+_SALARY_KEYS = ["sueldo", "salario", "deposito", "neto", "importe",
+                "total", "monto", "percepciones", "asimilado"]
+_NAME_KEYS = ["nombre", "empleado", "trabajador", "name"]
+_ID_KEYS = ["n°", "no.", "num", "numero", "clave", "rfc", "id"]
 
 
-def detectar_fila_header(df_raw, max_filas=11, min_matches=2):
+def _fila_es_header(df_raw, idx):
+    """Evalúa si la fila idx contiene patrones de encabezado de nómina."""
+    fila = df_raw.iloc[idx]
+    salary_count = 0
+    name_count = 0
+    id_count = 0
+    for v in fila:
+        if pd.isna(v):
+            continue
+        cell = _normalizar(str(v))
+        if not cell or cell in ("nan", "none"):
+            continue
+        if any(kw in cell for kw in _SALARY_KEYS):
+            salary_count += 1
+        if any(kw in cell for kw in _NAME_KEYS):
+            name_count += 1
+        if any(kw in cell for kw in _ID_KEYS):
+            id_count += 1
+    # Condition 1: at least 1 NAME/ID + 1 SALARY
+    if (name_count >= 1 or id_count >= 1) and salary_count >= 1:
+        return True
+    # Condition 2: total >= 3
+    if salary_count + name_count + id_count >= 3:
+        return True
+    return False
+
+
+def detectar_fila_header(df_raw):
     """
-    Escanea las primeras *max_filas* filas de un DataFrame leído SIN header
-    y retorna el índice de la primera fila que contiene >= min_matches keywords.
-    Retorna 0 si ninguna fila califica.
+    Escanea filas 0-20 (luego 0-30) buscando la fila de encabezado.
+    Retorna (fila_index, encontrado: bool).
+    Si no encuentra, retorna (0, False).
     """
-    for i in range(min(max_filas, len(df_raw))):
-        fila = df_raw.iloc[i]
-        textos = " ".join(_normalizar(str(v)) for v in fila if pd.notna(v))
-        matches = sum(1 for kw in _HEADER_KEYS if kw in textos)
-        if matches >= min_matches:
-            return i
-    return 0
+    for i in range(min(20, len(df_raw))):
+        if _fila_es_header(df_raw, i):
+            return i, True
+    for i in range(20, min(30, len(df_raw))):
+        if _fila_es_header(df_raw, i):
+            return i, True
+    return 0, False
 
 
 # ============================================================
@@ -83,30 +109,83 @@ def _es_columna_texto(df, col, umbral=0.5):
         return False
 
 
+def detectar_columna_sueldo(df):
+    """
+    Score-based salary column detection.
+    Returns (column_name or None, is_empty: bool).
+    """
+    PRIO_HIGH = ["neto real", "total deposito", "deposito total",
+                 "total a depositar", "neto real mensual", "deposito"]
+    PRIO_MED = ["sueldo", "neto", "bruto", "sueldo neto", "salario neto",
+                "sueldo bruto", "bruto mensual"]
+    PRIO_LOW = ["salario", "importe", "percepcion", "monto", "pago",
+                "remuneracion", "asimilado"]
+
+    mejor_col = None
+    mejor_score = -1
+    mejor_nonzero = -1
+    fallback_col = None
+    fallback_nscore = 0
+
+    for col in df.columns:
+        if str(col).lower().startswith("unnamed"):
+            continue
+        col_norm = _normalizar(col)
+
+        name_score = 0
+        if any(k in col_norm for k in PRIO_HIGH):
+            name_score = 3
+        elif any(k in col_norm for k in PRIO_MED):
+            name_score = 2
+        elif any(k in col_norm for k in PRIO_LOW):
+            name_score = 1
+
+        if name_score == 0:
+            continue
+
+        try:
+            serie = df[col].iloc[:, 0] if isinstance(df[col], pd.DataFrame) else df[col]
+            nums = pd.to_numeric(serie, errors="coerce").dropna()
+            value_score = int(nums.ge(100).sum())
+            nonzero = int(nums.ne(0).sum())
+        except Exception:
+            value_score = 0
+            nonzero = 0
+
+        total_score = name_score * 2 + value_score
+
+        if name_score > fallback_nscore:
+            fallback_nscore = name_score
+            fallback_col = col
+
+        if value_score > 0 and (total_score > mejor_score or
+                                (total_score == mejor_score and nonzero > mejor_nonzero)):
+            mejor_score = total_score
+            mejor_col = col
+            mejor_nonzero = nonzero
+
+    if mejor_col is not None:
+        return mejor_col, False
+    if fallback_col is not None:
+        return fallback_col, True
+    return None, False
+
+
 def detectar_columnas(df):
     """
     Auto-detecta columnas de puesto, sueldo y num_empleados.
     Retorna dict con las columnas encontradas (nombre original).
     """
+    # --- SUELDO (dedicated function) ---
+    col_sueldo, sueldo_vacio = detectar_columna_sueldo(df)
+
     PUESTO_HIGH = ["puesto", "cargo", "plaza", "posicion", "rol"]
     PUESTO_LOW  = ["categoria", "departamento", "area"]
     PUESTO_EXCLUIR = ["nombre", "clave", "rfc", "curp", "nss", "empleado", "banco", "cuenta", "clabe"]
-
-    SUELDO_KEYS = ["total deposito", "deposito total", "total a depositar", "neto real mensual",
-                   "neto mensual", "sueldo neto", "salario neto",
-                   "bruto mensual", "sueldo bruto", "salario bruto", "deposito",
-                   "neto real", "percepcion neta", "importe neto",
-                   "neto quincenal", "neto semanal", "sueldo mensual", "ingreso mensual",
-                   "salario mensual", "sd real", "sd fiscal", "asimilado", "importe",
-                   "salario diario", "remuneracion", "monto",
-                   "sueldo", "salario", "pago"]
-
     EMPLEADOS_KEYS = ["cantidad", "headcount", "num_empleados", "numero de empleados", "qty"]
 
-    resultado = {"puesto": None, "sueldo": None, "sueldo_vacio": False, "num_empleados": None}
+    resultado = {"puesto": None, "sueldo": col_sueldo, "sueldo_vacio": sueldo_vacio, "num_empleados": None}
     mejor_puesto_score = 0
-    mejor_sueldo_score = 0
-    mejor_sueldo_solo_nombre = 0  # Fallback: name match without value validation
 
     for col in df.columns:
         if str(col).lower().startswith("unnamed"):
@@ -128,37 +207,10 @@ def detectar_columnas(df):
                 mejor_puesto_score = score
                 resultado["puesto"] = col
 
-        # --- SUELDO ---
-        # Score by name match + valid numeric count
-        name_score = sum(len(k) * 2 for k in SUELDO_KEYS if k in col_norm)
-
-        if name_score > 0:
-            try:
-                valid_count = int(pd.to_numeric(df[col], errors="coerce").dropna().ge(10).sum())
-            except Exception:
-                valid_count = 0
-
-            total_score = name_score + valid_count
-
-            # Track best name-only match as fallback (for empty columns)
-            if name_score > mejor_sueldo_solo_nombre:
-                mejor_sueldo_solo_nombre = name_score
-                _sueldo_fallback = col
-
-            # Combined score determines winner
-            if total_score > mejor_sueldo_score and valid_count > 0:
-                mejor_sueldo_score = total_score
-                resultado["sueldo"] = col
-
         # --- NUM EMPLEADOS ---
         score_e = sum(len(k) for k in EMPLEADOS_KEYS if k in col_norm)
         if score_e > 0 and _es_columna_numerica(df, col):
             resultado["num_empleados"] = col
-
-    # Fallback: column name matched but values are empty/zero → accept with warning flag
-    if resultado["sueldo"] is None and mejor_sueldo_solo_nombre > 0:
-        resultado["sueldo"] = _sueldo_fallback
-        resultado["sueldo_vacio"] = True
 
     # Fallback puesto: si no se encontró, buscar columna con nombre/empleado/trabajador
     if resultado["puesto"] is None:
@@ -180,33 +232,44 @@ def detectar_columnas(df):
 _PALABRAS_RESUMEN_EXACT = [
     "total", "suma", "subtotal", "comision", "comisión", "desgloce",
     "nomina", "costo", "factura", "none", "nan", "",
+    "iva", "isr", "imss", "infonavit",
 ]
 _PALABRAS_RESUMEN_PARTIAL = [
     r"\btotal\b", r"\bsuma\b", r"\bsubtotal\b", r"\bcomision\b", r"\bcomisión\b",
-    r"\biva\b", r"\bimpuesto\b", r"\bdesgloce\b", r"\bconcepto\b",
+    r"\biva\b", r"\bisr\b", r"\bimss\b", r"\binfonavit\b",
+    r"\bimpuesto\b", r"\bdesgloce\b", r"\bconcepto\b",
     r"\bdescripcion\b", r"\bpromedio\b", r"\bobservacion\b",
 ]
 _RESUMEN_PATTERN = "|".join(_PALABRAS_RESUMEN_PARTIAL)
 
 
 def limpiar_filas_resumen(df, col_sueldo, col_nombre=None):
-    """Elimina filas de totales, resúmenes y valores no numéricos en sueldo."""
+    """Elimina filas de totales, resúmenes, sueldo < 10 y valores no numéricos."""
     if col_sueldo not in df.columns:
         return df
+
+    sueldo_num = pd.to_numeric(df[col_sueldo], errors="coerce")
+
     # Eliminar filas con texto/NaN en columna de sueldo
-    mask = pd.to_numeric(df[col_sueldo], errors="coerce").notna()
+    mask = sueldo_num.notna()
+
+    # Eliminar filas con sueldo < 10
+    mask_min = sueldo_num >= 10
 
     # Eliminar filas donde primera columna contiene palabras de resumen (exact match)
     primera_col = df.columns[0]
     mask2 = ~df[primera_col].astype(str).str.lower().str.strip().isin(_PALABRAS_RESUMEN_EXACT)
 
-    # Eliminar filas donde col_nombre contiene palabras de resumen (word-boundary match)
+    # Eliminar filas donde col_nombre contiene palabras de resumen o está vacío
     if col_nombre and col_nombre in df.columns:
-        mask3 = ~df[col_nombre].astype(str).str.lower().str.contains(_RESUMEN_PATTERN, na=False, regex=True)
+        nombre_str = df[col_nombre].astype(str).str.lower().str.strip()
+        mask3 = ~nombre_str.str.contains(_RESUMEN_PATTERN, na=False, regex=True)
+        mask_nombre = (nombre_str != "") & (nombre_str != "nan") & (nombre_str != "none")
     else:
         mask3 = True
+        mask_nombre = True
 
-    return df[mask & mask2 & mask3].reset_index(drop=True)
+    return df[mask & mask_min & mask2 & mask3 & mask_nombre].reset_index(drop=True)
 
 
 # ============================================================
