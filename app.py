@@ -911,7 +911,12 @@ if tipo == "cotizador":
                 sheet_names = xl.sheet_names
             except Exception:
                 archivo_xl.seek(0)
-                return pd.read_excel(archivo_xl, header=0), ""
+                df_fb_raw = pd.read_excel(archivo_xl, header=None)
+                h_fb, _ = detectar_fila_header(df_fb_raw)
+                archivo_xl.seek(0)
+                df_fb = pd.read_excel(archivo_xl, header=h_fb)
+                df_fb.columns = [str(c).strip() for c in df_fb.columns]
+                return df_fb.dropna(how="all"), f"Header fila: {h_fb}"
 
             mejor_df = None
             mejor_score = -1
@@ -951,7 +956,12 @@ if tipo == "cotizador":
                 return mejor_df, mejor_info
 
             archivo_xl.seek(0)
-            return pd.read_excel(archivo_xl, header=0), ""
+            df_fb_raw = pd.read_excel(archivo_xl, header=None)
+            h_fb, _ = detectar_fila_header(df_fb_raw)
+            archivo_xl.seek(0)
+            df_fb = pd.read_excel(archivo_xl, header=h_fb)
+            df_fb.columns = [str(c).strip() for c in df_fb.columns]
+            return df_fb.dropna(how="all"), f"Header fila: {h_fb}"
 
         def leer_csv_inteligente(archivo_csv):
             """Detecta header row en CSV y lee con el header correcto."""
