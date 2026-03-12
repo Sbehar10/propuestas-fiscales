@@ -1058,11 +1058,17 @@ if tipo == "cotizador":
                     _ia_resultado = st.session_state[_ia_cache_key]
                 else:
                     with st.spinner("🤖 Analizando estructura del archivo con IA..."):
-                        _ia_resultado = detectar_estructura_con_ia(_df_ia_raw, _hoja_ia)
+                        try:
+                            _ia_resultado = detectar_estructura_con_ia(_df_ia_raw, _hoja_ia)
+                        except Exception as e:
+                            st.error(f"Error IA: {e}")
+                            _ia_resultado = None
                     st.session_state[_ia_cache_key] = _ia_resultado
 
                 if _ia_resultado:
                     st.info(f"🤖 IA: {_ia_resultado.get('razon', 'Estructura detectada')}")
+                else:
+                    st.warning("⚠️ IA no disponible, usando detección automática")
                     # Map AI column index to column name in the loaded df
                     sueldo_idx = _ia_resultado.get("sueldo_col")
                     if sueldo_idx is not None and sueldo_idx < len(df_raw.columns):

@@ -541,5 +541,5 @@ Ejemplo de respuesta:
             if key not in result:
                 return None
         return result
-    except Exception:
-        return None
+    except Exception as e:
+        raise RuntimeError(f"detectar_estructura_con_ia: {e}") from e
