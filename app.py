@@ -14,7 +14,7 @@ from motor_calculo import (
 from procesador_nomina import (
     detectar_fila_header, detectar_columnas, detectar_bruto_neto, detectar_periodo,
     convertir_a_bruto_mensual, limpiar_filas_resumen, mapear_puestos, validar_datos,
-    detectar_estructura_con_ia,
+    detectar_estructura_con_ia, preparar_dataframe,
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
@@ -922,8 +922,8 @@ if tipo == "cotizador":
                 h_fb, _ = detectar_fila_header(df_fb_raw)
                 archivo_xl.seek(0)
                 df_fb = pd.read_excel(archivo_xl, header=h_fb)
-                df_fb.columns = [str(c).strip() for c in df_fb.columns]
-                return df_fb.dropna(how="all"), f"Header fila: {h_fb}"
+                df_fb = preparar_dataframe(df_fb)
+                return df_fb, f"Header fila: {h_fb}"
 
             mejor_df = None
             mejor_score = -1
@@ -943,8 +943,7 @@ if tipo == "cotizador":
                     # Re-read with correct header row
                     archivo_xl.seek(0)
                     df = pd.read_excel(archivo_xl, sheet_name=sheet, header=header_row)
-                    df.columns = [str(c).strip() for c in df.columns]
-                    df = df.dropna(how="all")
+                    df = preparar_dataframe(df)
 
                     score = _score_df(df)
                     if score > mejor_score:
@@ -967,8 +966,8 @@ if tipo == "cotizador":
             h_fb, _ = detectar_fila_header(df_fb_raw)
             archivo_xl.seek(0)
             df_fb = pd.read_excel(archivo_xl, header=h_fb)
-            df_fb.columns = [str(c).strip() for c in df_fb.columns]
-            return df_fb.dropna(how="all"), f"Header fila: {h_fb}"
+            df_fb = preparar_dataframe(df_fb)
+            return df_fb, f"Header fila: {h_fb}"
 
         def leer_csv_inteligente(archivo_csv):
             """Detecta header row en CSV y lee con el header correcto."""
@@ -979,17 +978,16 @@ if tipo == "cotizador":
 
                 archivo_csv.seek(0)
                 df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=header_row)
-                df.columns = [str(c).strip() for c in df.columns]
-                df = df.dropna(how="all")
+                df = preparar_dataframe(df)
                 return df
             except Exception:
                 pass
             try:
                 archivo_csv.seek(0)
-                return pd.read_csv(archivo_csv, encoding="latin-1")
+                return preparar_dataframe(pd.read_csv(archivo_csv, encoding="latin-1"))
             except Exception:
                 archivo_csv.seek(0)
-                return pd.read_csv(archivo_csv)
+                return preparar_dataframe(pd.read_csv(archivo_csv))
 
         _info_sheet = ""
         _header_encontrado = True
@@ -1017,6 +1015,7 @@ if tipo == "cotizador":
                         header_row, _header_encontrado = detectar_fila_header(df_sheet_raw)
                         archivo.seek(0)
                         df_raw = pd.read_excel(archivo, sheet_name=hoja_sel, header=header_row)
+                        df_raw = preparar_dataframe(df_raw)
                         _info_sheet = f"Pestaña: '{hoja_sel}' (manual) | Header fila: {header_row}"
                         st.info(f"📂 {_info_sheet}")
                         if not _header_encontrado:
