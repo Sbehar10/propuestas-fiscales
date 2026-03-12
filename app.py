@@ -1067,12 +1067,12 @@ if tipo == "cotizador":
 
                 if _ia_resultado:
                     st.info(f"🤖 IA: {_ia_resultado.get('razon', 'Estructura detectada')}")
-                else:
-                    st.warning("⚠️ IA no disponible, usando detección automática")
                     # Map AI column index to column name in the loaded df
                     sueldo_idx = _ia_resultado.get("sueldo_col")
                     if sueldo_idx is not None and sueldo_idx < len(df_raw.columns):
                         _ia_sueldo_col_name = df_raw.columns[sueldo_idx]
+                else:
+                    st.warning("⚠️ IA no disponible, usando detección automática")
 
         st.markdown("#### Vista previa del archivo")
         try:
