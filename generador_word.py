@@ -459,10 +459,10 @@ def _generar_seccion_diagnostico(doc, grupos):
         "de los colaboradores bajo un esquema 100% formal ante el IMSS."
     )
 
-    headers = ["Puesto", "Cant.", "Sueldo Bruto", "ISR", "IMSS Pat.", "IMSS Obr.",
-               "Infonavit", "ISN", "Costo Total/Mes"]
+    headers = ["Puesto", "Cant.", "Sueldo Bruto (c/u)", "ISR", "IMSS Pat.", "IMSS Obr.",
+               "Infonavit", "ISN", "Prestaciones", "Costo Total/Mes"]
     rows = []
-    totales = {"isr": 0, "imss_pat": 0, "imss_obr": 0, "info": 0, "isn": 0, "costo": 0}
+    totales = {"isr": 0, "imss_pat": 0, "imss_obr": 0, "info": 0, "isn": 0, "prest": 0, "costo": 0}
 
     for g in grupos:
         a = g["actual"]
@@ -476,6 +476,7 @@ def _generar_seccion_diagnostico(doc, grupos):
             fmt_moneda(a["imss_obrero"]["total"] * n),
             fmt_moneda(a["infonavit"] * n),
             fmt_moneda(a["isn"] * n),
+            fmt_moneda(a["prestaciones"]["total_mensual"] * n),
             fmt_moneda(a["costo_total"]),
         ]
         rows.append(row)
@@ -484,15 +485,17 @@ def _generar_seccion_diagnostico(doc, grupos):
         totales["imss_obr"] += a["imss_obrero"]["total"] * n
         totales["info"] += a["infonavit"] * n
         totales["isn"] += a["isn"] * n
+        totales["prest"] += a["prestaciones"]["total_mensual"] * n
         totales["costo"] += a["costo_total"]
 
     rows.append([
-        "TOTAL", "",  "",
+        "TOTAL", "", "",
         fmt_moneda(totales["isr"]),
         fmt_moneda(totales["imss_pat"]),
         fmt_moneda(totales["imss_obr"]),
         fmt_moneda(totales["info"]),
         fmt_moneda(totales["isn"]),
+        fmt_moneda(totales["prest"]),
         fmt_moneda(totales["costo"]),
     ])
 
