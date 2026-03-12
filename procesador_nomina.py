@@ -3,6 +3,7 @@
 
 import unicodedata
 import difflib
+import json
 import pandas as pd
 from constantes import PUESTOS_PROFESIONALES, SALARIO_MINIMO_MENSUAL
 
@@ -446,3 +447,63 @@ def validar_datos(df, cols):
             warnings.append(f"{vacios} filas con puesto vacío.")
 
     return warnings
+
+
+# ============================================================
+# DETECCIÓN DE ESTRUCTURA CON IA (Claude API)
+# ============================================================
+def detectar_estructura_con_ia(df_raw, sheet_name):
+    """
+    Envía las primeras 25 filas del DataFrame raw a Claude API.
+    Claude identifica: header row, columna de sueldo, columna de nombre,
+    filas de empleados válidos.
+    Retorna dict con resultados o None si falla.
+    """
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    preview = df_raw.head(25).to_string()
+
+    prompt = f"""Analiza esta hoja de Excel llamada "{sheet_name}".
+
+Aquí están las primeras 25 filas (raw, sin headers):
+{preview}
+
+Identifica:
+1. header_row: número de fila (0-indexed) donde están los nombres de columnas reales
+2. sueldo_col: número de columna (0-indexed) que contiene el SUELDO o DEPOSITO real de cada empleado (NO totales, NO sumas)
+3. nombre_col: número de columna (0-indexed) que contiene el NOMBRE del empleado
+4. filas_empleados: lista de números de fila que son empleados reales (excluye SUMA, TOTAL, COSTO, encabezados, pies de página)
+5. razon: explicación breve de tu decisión
+
+IMPORTANTE:
+- El sueldo de un empleado típico en México está entre $5,000 y $200,000 mensual
+- Las filas de SUMA/TOTAL/COSTO no son empleados
+- Responde SOLO con JSON válido, sin texto adicional
+
+Ejemplo de respuesta:
+{{
+  "header_row": 4,
+  "sueldo_col": 3,
+  "nombre_col": 1,
+  "filas_empleados": [5, 6, 7, 8],
+  "razon": "Header en fila 4, TOTAL DEPOSITO en col 3, empleados en filas 5-8"
+}}"""
+
+    try:
+        client = anthropic.Anthropic()
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = json.loads(message.content[0].text)
+        # Validate expected keys
+        for key in ("header_row", "sueldo_col", "nombre_col", "filas_empleados"):
+            if key not in result:
+                return None
+        return result
+    except Exception:
+        return None

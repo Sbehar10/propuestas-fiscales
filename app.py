@@ -13,7 +13,8 @@ from motor_calculo import (
 )
 from procesador_nomina import (
     detectar_fila_header, detectar_columnas, detectar_bruto_neto, detectar_periodo,
-    convertir_a_bruto_mensual, limpiar_filas_resumen, mapear_puestos, validar_datos
+    convertir_a_bruto_mensual, limpiar_filas_resumen, mapear_puestos, validar_datos,
+    detectar_estructura_con_ia,
 )
 from generador_word import generar_propuesta_word, fmt_moneda
 
@@ -1028,6 +1029,46 @@ if tipo == "cotizador":
             st.error(f"Error al leer el archivo: {e}")
             st.stop()
 
+        # --- AI structure detection (optional) ---
+        _ia_resultado = None
+        _ia_sueldo_col_name = None
+        if not archivo.name.endswith(".csv"):
+            try:
+                archivo.seek(0)
+                _todas = pd.ExcelFile(archivo).sheet_names
+                _hoja_ia = _todas[0] if _todas else "Sheet1"
+                # Use the manually selected sheet if available
+                if 'hoja_selector' in st.session_state and st.session_state.hoja_selector != "(Auto-detectar)":
+                    _hoja_ia = st.session_state.hoja_selector
+                elif _info_sheet:
+                    # Extract sheet name from auto-detect info
+                    import re
+                    _m = re.search(r"Pestaña: '([^']+)'", _info_sheet)
+                    if _m:
+                        _hoja_ia = _m.group(1)
+                archivo.seek(0)
+                _df_ia_raw = pd.read_excel(archivo, sheet_name=_hoja_ia, header=None)
+            except Exception:
+                _df_ia_raw = None
+                _hoja_ia = "Sheet1"
+
+            if _df_ia_raw is not None:
+                # Cache AI result per file to avoid repeated API calls
+                _ia_cache_key = f"_ia_cache_{archivo.name}_{archivo.size}_{_hoja_ia}"
+                if _ia_cache_key in st.session_state:
+                    _ia_resultado = st.session_state[_ia_cache_key]
+                else:
+                    with st.spinner("🤖 Analizando estructura del archivo con IA..."):
+                        _ia_resultado = detectar_estructura_con_ia(_df_ia_raw, _hoja_ia)
+                    st.session_state[_ia_cache_key] = _ia_resultado
+
+                if _ia_resultado:
+                    st.info(f"🤖 IA: {_ia_resultado.get('razon', 'Estructura detectada')}")
+                    # Map AI column index to column name in the loaded df
+                    sueldo_idx = _ia_resultado.get("sueldo_col")
+                    if sueldo_idx is not None and sueldo_idx < len(df_raw.columns):
+                        _ia_sueldo_col_name = df_raw.columns[sueldo_idx]
+
         st.markdown("#### Vista previa del archivo")
         try:
             st.dataframe(df_raw.head(10), use_container_width=True, hide_index=True)
@@ -1051,6 +1092,10 @@ if tipo == "cotizador":
         col_sueldo_auto = cols_detectadas["sueldo"]
         col_empleados = cols_detectadas["num_empleados"]
 
+        # If AI detected a sueldo column and rule-based didn't, prefer AI
+        if col_sueldo_auto is None and _ia_sueldo_col_name is not None:
+            col_sueldo_auto = _ia_sueldo_col_name
+
         # --- Manual sueldo column selector ---
         columnas_numericas = [col for col in df_raw.columns
                               if not str(col).lower().startswith("unnamed")
@@ -1059,14 +1104,22 @@ if tipo == "cotizador":
                                        _safe_series(df_raw, col), errors='coerce'
                                    ).notna().sum() > 2)]
 
-        if col_sueldo_auto and col_sueldo_auto in columnas_numericas:
-            idx_default = columnas_numericas.index(col_sueldo_auto)
+        # Determine default: prefer AI suggestion, then rule-based auto-detect
+        _sueldo_default = _ia_sueldo_col_name if _ia_sueldo_col_name and _ia_sueldo_col_name in columnas_numericas else col_sueldo_auto
+        if _sueldo_default and _sueldo_default in columnas_numericas:
+            idx_default = columnas_numericas.index(_sueldo_default)
         else:
             idx_default = 0
 
+        _sueldo_source = ""
+        if _ia_sueldo_col_name and _ia_sueldo_col_name in columnas_numericas:
+            _sueldo_source = " (🤖 IA)"
+        elif col_sueldo_auto:
+            _sueldo_source = " (auto-detectada)"
+
         if columnas_numericas:
             col_sueldo = st.selectbox(
-                "💰 Columna de sueldo a usar",
+                f"💰 Columna de sueldo a usar{_sueldo_source}",
                 options=columnas_numericas,
                 index=idx_default,
                 key="col_sueldo_selector",
