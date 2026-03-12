@@ -129,6 +129,14 @@ def preparar_dataframe(df):
     # Drop fully empty rows
     df = df.dropna(how='all')
 
+    # Drop leading spacer rows after header (NaN/0 in sueldo column)
+    col_sueldo, _ = detectar_columna_sueldo(df)
+    if col_sueldo and col_sueldo in df.columns:
+        sueldo_num = pd.to_numeric(df[col_sueldo], errors='coerce')
+        first_valid = sueldo_num[sueldo_num >= 10].index.min()
+        if pd.notna(first_valid):
+            df = df.loc[first_valid:]
+
     # Reset index
     df = df.reset_index(drop=True)
     return df
