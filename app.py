@@ -583,6 +583,7 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
     ahorro_total = 0
     total_empleados = 0
     total_administrado = 0
+    total_comision = 0
     total_iva = 0
 
     for r in resultados_grupos:
@@ -590,6 +591,7 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         ahorro_total += r["ahorro_mensual"]
         total_empleados += r["num_empleados"]
         total_administrado += r["irt"]["total_administrado"] * r["num_empleados"]
+        total_comision += r["irt"]["comision"] * r["num_empleados"]
         total_iva += r["irt"]["iva"] * r["num_empleados"]
 
     costo_propuesto_pre_iva = costo_actual_total - ahorro_total
@@ -779,6 +781,10 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
         "costo_actual_total": costo_actual_total,
         "ahorro_total_mensual": ahorro_total,
         "total_administrado": total_administrado,
+        "total_comision": total_comision,
+        "subtotal_factura": costo_propuesto_pre_iva,
+        "iva_total": total_iva,
+        "total_factura": costo_propuesto_pre_iva + total_iva,
         "es_neto": es_neto,
     }
 

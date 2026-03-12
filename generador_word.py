@@ -446,10 +446,11 @@ def _generar_seccion_facturacion(doc, datos_cliente, resultados, tipo_servicio):
 
     comision_pct = datos_cliente["comision_pct"]
     total_admin = resultados.get("total_administrado", 0)
-    comision = total_admin * (comision_pct / 100)
-    subtotal = total_admin + comision
-    iva = subtotal * 0.16
-    total = subtotal + iva
+    # Use pre-calculated values from app.py (same as screen display)
+    comision = resultados.get("total_comision", round(total_admin * (comision_pct / 100), 2))
+    subtotal = resultados.get("subtotal_factura", total_admin + comision)
+    iva = resultados.get("iva_total", round(subtotal * 0.16, 2))
+    total = resultados.get("total_factura", subtotal + iva)
 
     headers = ["Concepto", "Monto"]
     rows = [
