@@ -110,6 +110,30 @@ def _es_columna_texto(df, col, umbral=0.5):
         return False
 
 
+def preparar_dataframe(df):
+    """
+    Limpia el DataFrame después de leerlo con el header correcto:
+    - Strip column names
+    - Fuerza conversión numérica en columnas que parecen dinero
+    - Elimina filas completamente vacías
+    - Reset index
+    """
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Force numeric on ALL columns that look like money
+    for col in df.columns:
+        converted = pd.to_numeric(df[col], errors='coerce')
+        if converted.notna().sum() > 0:
+            df[col] = converted
+
+    # Drop fully empty rows
+    df = df.dropna(how='all')
+
+    # Reset index
+    df = df.reset_index(drop=True)
+    return df
+
+
 def detectar_columna_sueldo(df):
     """
     Score-based salary column detection.
@@ -249,13 +273,14 @@ def limpiar_filas_resumen(df, col_sueldo, col_nombre=None):
     if col_sueldo not in df.columns:
         return df
 
-    sueldo_num = pd.to_numeric(df[col_sueldo], errors="coerce")
+    # Force numeric conversion on sueldo column
+    df[col_sueldo] = pd.to_numeric(df[col_sueldo], errors="coerce").fillna(0)
 
-    # Eliminar filas con texto/NaN en columna de sueldo
-    mask = sueldo_num.notna()
+    # Eliminar filas con sueldo == 0 (was NaN/text)
+    mask = df[col_sueldo] != 0
 
     # Eliminar filas con sueldo < 10
-    mask_min = sueldo_num >= 10
+    mask_min = df[col_sueldo] >= 10
 
     # Eliminar filas donde primera columna contiene palabras de resumen (exact match)
     primera_col = df.columns[0]
