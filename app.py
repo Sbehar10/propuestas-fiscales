@@ -1042,8 +1042,39 @@ if tipo == "cotizador":
         periodo = detectar_periodo(df_raw)
 
         col_puesto = cols_detectadas["puesto"]
-        col_sueldo = cols_detectadas["sueldo"]
+        col_sueldo_auto = cols_detectadas["sueldo"]
         col_empleados = cols_detectadas["num_empleados"]
+
+        # --- Manual sueldo column selector ---
+        columnas_numericas = [col for col in df_raw.columns
+                              if not str(col).lower().startswith("unnamed")
+                              and (df_raw[col].dtype in ['float64', 'int64']
+                                   or pd.to_numeric(
+                                       _safe_series(df_raw, col), errors='coerce'
+                                   ).notna().sum() > 2)]
+
+        if col_sueldo_auto and col_sueldo_auto in columnas_numericas:
+            idx_default = columnas_numericas.index(col_sueldo_auto)
+        else:
+            idx_default = 0
+
+        if columnas_numericas:
+            col_sueldo = st.selectbox(
+                "💰 Columna de sueldo a usar",
+                options=columnas_numericas,
+                index=idx_default,
+                key="col_sueldo_selector",
+                help="El sistema detectó esta columna automáticamente. Puedes cambiarla si no es correcta.",
+            )
+            try:
+                vals_preview = pd.to_numeric(
+                    _safe_series(df_raw, col_sueldo), errors="coerce"
+                ).dropna().head(5).tolist()
+                st.caption(f"Primeros valores: {[round(v, 2) for v in vals_preview]}")
+            except Exception:
+                pass
+        else:
+            col_sueldo = col_sueldo_auto
 
         if col_sueldo is None:
             st.error(f"""No se detectó columna de sueldo.
@@ -1061,7 +1092,7 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                 st.dataframe(df_raw.head(5), use_container_width=True, hide_index=True)
             st.stop()
 
-        if cols_detectadas.get("sueldo_vacio"):
+        if cols_detectadas.get("sueldo_vacio") and col_sueldo == col_sueldo_auto:
             st.warning(f"Columna **'{col_sueldo}'** detectada pero sin datos numericos. Ingresa los montos de nomina en tu archivo.")
 
         if col_puesto is None:
