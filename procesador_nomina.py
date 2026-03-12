@@ -531,16 +531,21 @@ Ejemplo de respuesta:
 
         api_key = None
         try:
-            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            api_key = str(st.secrets.get("ANTHROPIC_API_KEY", "")).strip()
         except Exception:
             pass
         if not api_key:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
+            api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
 
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY no encontrada en secrets ni env vars")
 
-        print(f"DEBUG IA: API key found, length={len(api_key)}, starts={api_key[:15]}")
+        # DEBUG: Print exactly what key is being used
+        print(f"DEBUG API KEY: length={len(api_key)}, "
+              f"starts='{api_key[:20]}', "
+              f"ends='{api_key[-10:]}'")
+        print(f"DEBUG: Any whitespace? {repr(api_key) != repr(api_key.strip())}")
+        print(f"DEBUG: Any newlines? {chr(10) in api_key or chr(13) in api_key}")
 
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
