@@ -493,7 +493,10 @@ Ejemplo de respuesta:
 }}"""
 
     try:
-        client = anthropic.Anthropic()
+        import streamlit as st
+        import os
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", None) or os.getenv("ANTHROPIC_API_KEY")
+        client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
