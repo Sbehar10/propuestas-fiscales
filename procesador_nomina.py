@@ -528,7 +528,20 @@ Ejemplo de respuesta:
     try:
         import streamlit as st
         import os
-        api_key = st.secrets.get("ANTHROPIC_API_KEY", None) or os.getenv("ANTHROPIC_API_KEY")
+
+        api_key = None
+        try:
+            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        except Exception:
+            pass
+        if not api_key:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY no encontrada en secrets ni env vars")
+
+        print(f"DEBUG IA: API key found, length={len(api_key)}, starts={api_key[:15]}")
+
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
