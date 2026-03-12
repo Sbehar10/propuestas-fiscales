@@ -487,77 +487,63 @@ def validar_datos(df, cols):
 # ============================================================
 def detectar_estructura_con_ia(df_raw, sheet_name):
     """
-    Envía las primeras 25 filas del DataFrame raw a Claude API.
-    Claude identifica: header row, columna de sueldo, columna de nombre,
-    filas de empleados válidos.
-    Retorna dict con resultados o None si falla.
+    Envía las primeras 20 filas del DataFrame raw a Claude API via requests.
+    Retorna dict con header_row, sueldo_col, nombre_col, filas_empleados, razon.
     """
+    import os
+    import streamlit as st
+    import requests
+
+    # Get API key
+    api_key = ""
     try:
-        import anthropic
-    except ImportError:
-        return None
+        api_key = str(st.secrets["ANTHROPIC_API_KEY"]).strip()
+    except Exception:
+        api_key = str(os.environ.get("ANTHROPIC_API_KEY", "")).strip()
 
-    preview = df_raw.head(25).to_string()
+    if not api_key or len(api_key) < 20:
+        raise RuntimeError(f"API key no encontrada o muy corta: '{api_key[:10]}'")
 
-    prompt = f"""Analiza esta hoja de Excel llamada "{sheet_name}".
+    preview = df_raw.head(20).to_string()
 
-Aquí están las primeras 25 filas (raw, sin headers):
+    payload = {
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 500,
+        "messages": [{
+            "role": "user",
+            "content": f"""Analiza esta hoja Excel "{sheet_name}":
+
 {preview}
 
-Identifica:
-1. header_row: número de fila (0-indexed) donde están los nombres de columnas reales
-2. sueldo_col: número de columna (0-indexed) que contiene el SUELDO o DEPOSITO real de cada empleado (NO totales, NO sumas)
-3. nombre_col: número de columna (0-indexed) que contiene el NOMBRE del empleado
-4. filas_empleados: lista de números de fila que son empleados reales (excluye SUMA, TOTAL, COSTO, encabezados, pies de página)
-5. razon: explicación breve de tu decisión
+Responde SOLO con JSON:
+{{"header_row": 0, "sueldo_col": 3, "nombre_col": 1, "filas_empleados": [1,2,3], "razon": "explicacion"}}"""
+        }]
+    }
 
-IMPORTANTE:
-- El sueldo de un empleado típico en México está entre $5,000 y $200,000 mensual
-- Las filas de SUMA/TOTAL/COSTO no son empleados
-- Responde SOLO con JSON válido, sin texto adicional
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
 
-Ejemplo de respuesta:
-{{
-  "header_row": 4,
-  "sueldo_col": 3,
-  "nombre_col": 1,
-  "filas_empleados": [5, 6, 7, 8],
-  "razon": "Header en fila 4, TOTAL DEPOSITO en col 3, empleados en filas 5-8"
-}}"""
+    response = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
 
-    try:
-        import streamlit as st
-        import os
+    if response.status_code != 200:
+        raise RuntimeError(f"API error {response.status_code}: {response.text[:200]}")
 
-        api_key = None
-        try:
-            api_key = str(st.secrets.get("ANTHROPIC_API_KEY", "")).strip()
-        except Exception:
-            pass
-        if not api_key:
-            api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    data = response.json()
+    text = data["content"][0]["text"].strip()
 
-        if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY no encontrada en secrets ni env vars")
+    # Clean JSON (remove markdown fences if present)
+    if "```" in text:
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
 
-        # DEBUG: Print exactly what key is being used
-        print(f"DEBUG API KEY: length={len(api_key)}, "
-              f"starts='{api_key[:20]}', "
-              f"ends='{api_key[-10:]}'")
-        print(f"DEBUG: Any whitespace? {repr(api_key) != repr(api_key.strip())}")
-        print(f"DEBUG: Any newlines? {chr(10) in api_key or chr(13) in api_key}")
-
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = json.loads(message.content[0].text)
-        # Validate expected keys
-        for key in ("header_row", "sueldo_col", "nombre_col", "filas_empleados"):
-            if key not in result:
-                return None
-        return result
-    except Exception as e:
-        raise RuntimeError(f"detectar_estructura_con_ia: {e}") from e
+    result = json.loads(text)
+    return result
