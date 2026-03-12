@@ -812,6 +812,25 @@ def mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, c
             use_container_width=True,
         )
 
+    # --- Guardar propuesta en Supabase ---
+    st.divider()
+    cliente_nombre = st.text_input("📝 Nombre del cliente", value=nombre_empresa or "", placeholder="Ej: Empresa ABC", key="save_cliente_irt")
+    if st.button("💾 Guardar propuesta", type="primary", key="save_prop_irt"):
+        if cliente_nombre:
+            from database import guardar_propuesta
+            guardar_propuesta(
+                cliente=cliente_nombre,
+                esquema="IRT",
+                num_empleados=total_empleados,
+                ahorro_mensual=ahorro_total,
+                ahorro_anual=ahorro_total * 12,
+                costo_actual=costo_actual_total,
+                costo_propuesto=costo_propuesto_pre_iva,
+            )
+            st.success("✅ Propuesta guardada correctamente")
+        else:
+            st.warning("Escribe el nombre del cliente primero")
+
 
 # ============================================================
 # COTIZADOR (SUBIR NOMINA)
@@ -1682,6 +1701,25 @@ elif tipo == "excedentes":
                 use_container_width=True,
             )
 
+        # --- Guardar propuesta en Supabase ---
+        st.divider()
+        cliente_nombre = st.text_input("📝 Nombre del cliente", value=nombre_empresa or "", placeholder="Ej: Empresa ABC", key="save_cliente_exc")
+        if st.button("💾 Guardar propuesta", type="primary", key="save_prop_exc"):
+            if cliente_nombre:
+                from database import guardar_propuesta
+                guardar_propuesta(
+                    cliente=cliente_nombre,
+                    esquema="Excedentes",
+                    num_empleados=1,
+                    ahorro_mensual=r['ahorro_mensual'],
+                    ahorro_anual=r['ahorro_anual'],
+                    costo_actual=r['costo_hipotetico_nomina'],
+                    costo_propuesto=r['monto_excedente'] + r['comision'],
+                )
+                st.success("✅ Propuesta guardada correctamente")
+            else:
+                st.warning("Escribe el nombre del cliente primero")
+
 
 # ============================================================
 # SOCIEDAD CIVIL — Piramidacion como modo default
@@ -1917,8 +1955,45 @@ elif tipo == "sc":
                     type="secondary",
                     use_container_width=True,
                 )
+
+            # --- Guardar propuesta en Supabase ---
+            st.divider()
+            ahorro_sc_total = sum(r['ahorro_cliente_mensual'] for r in resultados_sc)
+            costo_nom_sc_total = sum(r['costo_nomina_100'] for r in resultados_sc)
+            costo_sc_prop_total = sum(r['ingreso_total'] + r['comision'] for r in resultados_sc)
+            cliente_nombre = st.text_input("📝 Nombre del cliente", value=nombre_empresa or "", placeholder="Ej: Empresa ABC", key="save_cliente_sc")
+            if st.button("💾 Guardar propuesta", type="primary", key="save_prop_sc"):
+                if cliente_nombre:
+                    from database import guardar_propuesta
+                    guardar_propuesta(
+                        cliente=cliente_nombre,
+                        esquema="Sociedad Civil",
+                        num_empleados=len(resultados_sc),
+                        ahorro_mensual=ahorro_sc_total,
+                        ahorro_anual=ahorro_sc_total * 12,
+                        costo_actual=costo_nom_sc_total,
+                        costo_propuesto=costo_sc_prop_total,
+                    )
+                    st.success("✅ Propuesta guardada correctamente")
+                else:
+                    st.warning("Escribe el nombre del cliente primero")
+
     else:
         st.info("Agrega al menos un directivo/socio para generar la propuesta.")
+
+# === HISTORIAL DE PROPUESTAS ===
+with st.expander("📋 Historial de propuestas"):
+    from database import obtener_propuestas
+    resultado = obtener_propuestas()
+    if resultado.data:
+        df_hist = pd.DataFrame(resultado.data)
+        df_hist = df_hist[["created_at", "cliente", "esquema", "num_empleados",
+                           "ahorro_mensual", "ahorro_anual", "usuario"]]
+        df_hist.columns = ["Fecha", "Cliente", "Esquema", "Empleados",
+                           "Ahorro Mensual", "Ahorro Anual", "Usuario"]
+        st.dataframe(df_hist, use_container_width=True)
+    else:
+        st.info("Aún no hay propuestas guardadas.")
 
 # === FOOTER ===
 st.markdown("---")
