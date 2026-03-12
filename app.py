@@ -888,8 +888,23 @@ if tipo == "cotizador":
             df_in.columns = deduped
             return df_in
 
+        def _score_df(df):
+            """Score a DataFrame by how many payroll-like columns it has."""
+            cols_norm = [str(c).lower().strip() for c in df.columns]
+            tiene_sueldo = any(
+                any(k in c for k in _KW_SUELDO)
+                for c in cols_norm if not c.startswith("unnamed")
+            )
+            tiene_puesto = any(
+                any(k in c for k in _KW_PUESTO)
+                for c in cols_norm if not c.startswith("unnamed")
+            )
+            named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c not in ("none", "nan", ""))
+            filas_datos = len(df.dropna(how="all"))
+            return named_cols + (20 if tiene_sueldo else 0) + (10 if tiene_puesto else 0) + min(filas_datos, 50)
+
         def leer_excel_inteligente(archivo_xl):
-            """Escanea TODAS las pestañas y headers 0-10 para elegir la mejor combinación."""
+            """Escanea TODAS las pestañas, detecta header row, elige la mejor."""
             try:
                 archivo_xl.seek(0)
                 xl = pd.ExcelFile(archivo_xl)
@@ -907,31 +922,25 @@ if tipo == "cotizador":
                 if any(p in sheet_norm for p in _PESTANAS_IGNORAR):
                     continue
 
-                for h in range(21):
-                    try:
-                        archivo_xl.seek(0)
-                        df = pd.read_excel(archivo_xl, sheet_name=sheet, header=h)
-                        cols_norm = [str(c).lower().strip() for c in df.columns]
+                try:
+                    # Read raw (no header) to detect header row
+                    archivo_xl.seek(0)
+                    df_raw = pd.read_excel(archivo_xl, sheet_name=sheet, header=None)
+                    header_row, _found = detectar_fila_header(df_raw)
 
-                        tiene_sueldo = any(
-                            any(k in c for k in _KW_SUELDO)
-                            for c in cols_norm if not c.startswith("unnamed")
-                        )
-                        tiene_puesto = any(
-                            any(k in c for k in _KW_PUESTO)
-                            for c in cols_norm if not c.startswith("unnamed")
-                        )
-                        named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c not in ("none", "nan", ""))
-                        filas_datos = len(df.dropna(how="all"))
+                    # Re-read with correct header row
+                    archivo_xl.seek(0)
+                    df = pd.read_excel(archivo_xl, sheet_name=sheet, header=header_row)
+                    df.columns = [str(c).strip() for c in df.columns]
+                    df = df.dropna(how="all")
 
-                        score = named_cols + (20 if tiene_sueldo else 0) + (10 if tiene_puesto else 0) + min(filas_datos, 50)
-
-                        if score > mejor_score:
-                            mejor_score = score
-                            mejor_df = df.copy()
-                            mejor_info = f"Pestaña: '{sheet}' | Header fila: {h}"
-                    except Exception:
-                        pass
+                    score = _score_df(df)
+                    if score > mejor_score:
+                        mejor_score = score
+                        mejor_df = df.copy()
+                        mejor_info = f"Pestaña: '{sheet}' | Header fila: {header_row}"
+                except Exception:
+                    pass
 
             try:
                 archivo_xl.seek(0)
@@ -945,41 +954,25 @@ if tipo == "cotizador":
             return pd.read_excel(archivo_xl, header=0), ""
 
         def leer_csv_inteligente(archivo_csv):
-            """Prueba skiprows=0..10 y elige el header que produce mas columnas reconocibles."""
-            mejor_df = None
-            mejor_score = -1
-            for skip in range(21):
-                try:
-                    archivo_csv.seek(0)
-                    df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=skip)
-                    cols_norm = [str(c).lower().strip() for c in df.columns]
+            """Detecta header row en CSV y lee con el header correcto."""
+            try:
+                archivo_csv.seek(0)
+                df_raw = pd.read_csv(archivo_csv, encoding="utf-8", header=None)
+                header_row, _found = detectar_fila_header(df_raw)
 
-                    tiene_sueldo = any(
-                        any(k in c for k in _KW_SUELDO)
-                        for c in cols_norm if not c.startswith("unnamed")
-                    )
-                    tiene_puesto = any(
-                        any(k in c for k in _KW_PUESTO)
-                        for c in cols_norm if not c.startswith("unnamed")
-                    )
-                    named_cols = sum(1 for c in cols_norm if not c.startswith("unnamed") and c not in ("none", "nan", ""))
-                    filas_datos = len(df.dropna(how="all"))
-
-                    score = named_cols + (20 if tiene_sueldo else 0) + (10 if tiene_puesto else 0) + min(filas_datos, 50)
-
-                    if score > mejor_score:
-                        mejor_score = score
-                        mejor_df = df.copy()
-                except Exception:
-                    pass
-            if mejor_df is None:
-                try:
-                    archivo_csv.seek(0)
-                    mejor_df = pd.read_csv(archivo_csv, encoding="latin-1")
-                except Exception:
-                    archivo_csv.seek(0)
-                    mejor_df = pd.read_csv(archivo_csv)
-            return mejor_df
+                archivo_csv.seek(0)
+                df = pd.read_csv(archivo_csv, encoding="utf-8", header=0, skiprows=header_row)
+                df.columns = [str(c).strip() for c in df.columns]
+                df = df.dropna(how="all")
+                return df
+            except Exception:
+                pass
+            try:
+                archivo_csv.seek(0)
+                return pd.read_csv(archivo_csv, encoding="latin-1")
+            except Exception:
+                archivo_csv.seek(0)
+                return pd.read_csv(archivo_csv)
 
         _info_sheet = ""
         _header_encontrado = True
