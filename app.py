@@ -292,7 +292,7 @@ st.markdown("""
 # === MASTHEAD ===
 st.markdown("""
 <div class="masthead">
-    <p class="masthead-brand">BEHAR FISCAL</p>
+    <p class="masthead-brand"></p>
     <p class="masthead-sub">Optimizaci&oacute;n Fiscal Empresarial 2026</p>
 </div>
 """, unsafe_allow_html=True)
