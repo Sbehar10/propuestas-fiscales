@@ -434,13 +434,14 @@ def calcular_sociedad_civil(ingreso_total, pct_anticipo, comision_pct, piramidar
     sbc = calcular_sbc_diario(sd)
     isr_nomina = calcular_isr(ingreso_total)
     imss_pat = calcular_imss_patronal(sd, 30.4, "I")
+    imss_obr_nom = calcular_imss_obrero(sd, 30.4)
     infonavit_nom = round(sbc * INFONAVIT_TASA * 30.4, 2)
     isn_nom = round(ingreso_total * ISN_TASA, 2)
     prestaciones_nom = calcular_prestaciones_ley(sd)
     costo_nomina_100 = (ingreso_total + imss_pat["total"] + infonavit_nom
                         + isn_nom + prestaciones_nom["total_mensual"])
-    # Neto nómina: sin IMSS obrero porque SC no cotiza IMSS
-    neto_nomina = ingreso_total - isr_nomina["isr_neto"]
+    # Neto nómina 100%: worker pays ISR + IMSS obrero
+    neto_nomina = ingreso_total - isr_nomina["isr_neto"] - imss_obr_nom["total"]
 
     # Ahorro: costo nómina 100% vs subtotal factura SC (pre-IVA, el IVA es acreditable)
     ahorro_cliente = costo_nomina_100 - subtotal
