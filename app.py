@@ -1471,12 +1471,15 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     df_trabajo["_puesto_cat"] = _safe_series(df_trabajo, col_puesto).map(
                         lambda p: mapeo_final.get(p, {}).get("puesto_catalogo", "Otro (personalizado)")
                     )
-                    df_agrupado = df_trabajo.groupby("_puesto_cat").agg(
+                    df_trabajo["_exento_bin"] = df_trabajo["_ingreso_exento"].round(0)
+                    df_trabajo["_group_key"] = df_trabajo["_puesto_cat"] + "||" + df_trabajo["_exento_bin"].astype(str)
+                    df_agrupado = df_trabajo.groupby("_group_key").agg(
                         sueldo_promedio=(col_sueldo, "mean"),
                         num_empleados=(col_sueldo, "count"),
                         exento_promedio=("_ingreso_exento", "mean"),
+                        _puesto_first=("_puesto_cat", "first"),
                     ).reset_index()
-                    df_agrupado.rename(columns={"_puesto_cat": col_puesto, "sueldo_promedio": col_sueldo}, inplace=True)
+                    df_agrupado.rename(columns={"_puesto_first": col_puesto, "sueldo_promedio": col_sueldo}, inplace=True)
                 else:
                     df_agrupado = df_trabajo.rename(columns={col_empleados: "num_empleados"})
                     if "_ingreso_exento" in df_agrupado.columns:
@@ -1504,7 +1507,7 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     sueldo_total_raw = sueldo_raw + ingreso_adicional_periodo
 
                     # Convert to monthly bruto using auto-detected period and salary type
-                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_total_raw, periodo, tipo_sueldo.lower())
+                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_total_raw, periodo_nomina.lower(), tipo_sueldo.lower())
                     sueldo = sueldo_total_raw * mult_periodo  # Keep for display (total neto monthly)
 
                     if es_neto:
