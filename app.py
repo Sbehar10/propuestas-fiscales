@@ -312,50 +312,26 @@ def _set_isn(tasa_isn):
     motor_calculo.ISN_TASA = tasa_isn
 
 
-def calcular_base_imss_inteligente(sueldo_bruto, min_profesional, nivel="Moderado"):
+def calcular_base_imss_inteligente(sueldo_bruto, min_profesional, nivel="Minimo profesional"):
     """
-    Determina base IMSS segun nivel de sueldo y agresividad.
-
-    Reglas Moderado (default):
-    - sueldo <= SM           -> SM (no hay diferencial)
-    - sueldo <= min_prof*1.3 -> SM
-    - sueldo <= 50,000       -> min_profesional
-    - sueldo > 50,000        -> max(min_profesional, sueldo * 0.30)
-
-    Conservador: un nivel arriba (mas base, menos ahorro, menos riesgo)
-    Agresivo: un nivel abajo (menos base, mas ahorro, mas riesgo)
+    Determina base IMSS segun el nivel/porcentaje seleccionado.
+    nivel puede ser: "Minimo profesional", "40% IMSS / 60% IRT", etc., o un int (porcentaje).
     """
     SM = SALARIO_MINIMO_MENSUAL
-
-    if nivel == "Conservador":
-        if sueldo_bruto <= SM:
-            return SM
-        elif sueldo_bruto <= min_profesional * 1.5:
-            return min_profesional
-        elif sueldo_bruto <= 50_000:
-            return min_profesional
+    if sueldo_bruto <= SM:
+        return SM  # 100% IMSS, no room for IRT
+    if nivel == "Minimo profesional":
+        return max(SM, min_profesional)
+    # Parse percentage from nivel string like "40% IMSS / 60% IRT"
+    try:
+        if "%" in str(nivel):
+            pct = int(str(nivel).split("%")[0])
         else:
-            return max(min_profesional, sueldo_bruto * 0.40)
-
-    elif nivel == "Moderado":
-        if sueldo_bruto <= SM:
-            return SM
-        elif sueldo_bruto <= min_profesional * 1.3:
-            return SM
-        elif sueldo_bruto <= 50_000:
-            return min_profesional
-        else:
-            return max(min_profesional, sueldo_bruto * 0.30)
-
-    else:  # Agresivo
-        if sueldo_bruto <= SM:
-            return SM
-        elif sueldo_bruto <= min_profesional * 1.1:
-            return SM
-        elif sueldo_bruto <= 50_000:
-            return SM
-        else:
-            return min_profesional
+            pct = int(nivel)
+        base = sueldo_bruto * (pct / 100)
+        return max(SM, base)  # never below SM
+    except Exception:
+        return max(SM, min_profesional)
 
 
 def generar_excel_resultados(resultados_grupos, nombre_empresa, estado_nombre, tasa_isn):
@@ -537,19 +513,35 @@ with st.sidebar:
         clase_riesgo_global = "I"  # fallback label
 
     st.markdown("---")
-    st.markdown("### Nivel de Esquema")
+    st.markdown("### Base IMSS / IRT Split")
+    _NIVEL_OPCIONES = [
+        "Minimo profesional",
+        "40% IMSS / 60% IRT",
+        "50% IMSS / 50% IRT",
+        "60% IMSS / 40% IRT",
+        "Personalizado",
+    ]
     nivel_esquema = st.radio(
-        "Agresividad de la base IMSS:",
-        options=["Conservador", "Moderado", "Agresivo"],
-        index=1,
+        "Base IMSS como % del sueldo bruto:",
+        options=_NIVEL_OPCIONES,
+        index=0,
         key="nivel_esquema",
         horizontal=True,
     )
-    st.caption({
-        "Conservador": "Mas base IMSS, menos ahorro, menos riesgo",
-        "Moderado": "Balance entre ahorro y seguridad",
-        "Agresivo": "Menos base IMSS, mas ahorro, mas riesgo",
-    }[nivel_esquema])
+    if nivel_esquema == "Personalizado":
+        _pct_custom = st.number_input(
+            "% del sueldo bruto para IMSS:",
+            min_value=0, max_value=100, value=40, step=5,
+            key="nivel_pct_custom",
+        )
+        nivel_esquema = f"{_pct_custom}% IMSS / {100 - _pct_custom}% IRT"
+    _captions = {
+        "Minimo profesional": "Base IMSS = salario minimo profesional del puesto",
+        "40% IMSS / 60% IRT": "40% del bruto va a IMSS, 60% como IRT exento",
+        "50% IMSS / 50% IRT": "50% del bruto va a IMSS, 50% como IRT exento",
+        "60% IMSS / 40% IRT": "60% del bruto va a IMSS, 40% como IRT exento",
+    }
+    st.caption(_captions.get(nivel_esquema, f"Base IMSS = {nivel_esquema}"))
 
     st.markdown("---")
     st.markdown("### Tipo de Servicio")
@@ -1568,6 +1560,13 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                         df_ajustes = pd.DataFrame(ajustes_base)
                         df_ajustes.columns = ["Puesto", "Sueldo Bruto", "Min. Profesional", "Base IMSS Ajustada"]
                         st.dataframe(df_ajustes, use_container_width=True, hide_index=True)
+
+                    # Warn about employees at/below SM (100% IMSS, no IRT room)
+                    _sm = SALARIO_MINIMO_MENSUAL
+                    _grupos_sm = [g for g in resultados_grupos if g["sueldo_bruto"] <= _sm]
+                    if _grupos_sm:
+                        _n_sm = sum(g["num_empleados"] for g in _grupos_sm)
+                        st.warning(f"{_n_sm} empleado(s) con sueldo <= salario minimo (${_sm:,.2f}) quedan 100% IMSS — no hay margen para IRT.")
 
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto, es_neto=es_neto)
                 else:

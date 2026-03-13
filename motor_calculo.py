@@ -295,15 +295,16 @@ def calcular_esquema_irt(sueldo_bruto, base_imss_mensual, clase_riesgo,
 
     # ISR sobre la base nómina
     isr = calcular_isr(base_nomina)
-    sueldo_neto = base_nomina - isr["isr_neto"]
-
-    # PPS/IRT = lo que completa el depósito total
-    # Excel: PPS = DEPOSITO - SUELDO + ISR_NETO
-    excedente_irt = sueldo_bruto - sueldo_neto
 
     # IMSS desglosado patronal y obrero (para display en Word/app)
     imss_pat = calcular_imss_patronal(salario_diario, 30.4, clase_riesgo, prima_riesgo)
     imss_obr = calcular_imss_obrero(salario_diario, 30.4)
+
+    # Neto = base_nomina - ISR - IMSS obrero (worker pays both)
+    sueldo_neto = base_nomina - isr["isr_neto"] - imss_obr["total"]
+
+    # PPS/IRT = lo que completa el depósito total (covers ISR + IMSS obrero)
+    excedente_irt = sueldo_bruto - sueldo_neto
 
     # Costo social combinado (pat+obr, para display desglosado)
     costo_social = calcular_costo_social(salario_diario, 30.4, clase_riesgo, isn_tasa, prima_riesgo)
@@ -517,7 +518,10 @@ def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
     """Calcula el resumen completo para un grupo: Actual vs IRT"""
     actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados, prima_riesgo)
 
-    irt = calcular_esquema_irt(sueldo_bruto, minimo_profesional, clase_riesgo,
+    # IRT receives the worker's NETO as deposit target (not the bruto)
+    # This ensures the worker always receives the same neto in both schemes
+    neto_target = actual["neto_trabajador"]
+    irt = calcular_esquema_irt(neto_target, minimo_profesional, clase_riesgo,
                                 comision_pct, num_empleados, prima_riesgo=prima_riesgo)
 
     # Ahorro: costo interno actual vs subtotal factura IRT (pre-IVA, el IVA es acreditable)
