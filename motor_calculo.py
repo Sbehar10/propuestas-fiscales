@@ -519,8 +519,8 @@ def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
     """Calcula el resumen completo para un grupo: Actual vs IRT"""
     actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados, prima_riesgo)
 
-    # IRT targets: worker's actual neto + any exento income (PPS/IRT)
-    neto_target = actual["neto_trabajador"] + ingreso_exento
+    # IRT targets the same neto the worker gets under Actual (bruto already includes PPS)
+    neto_target = actual["neto_trabajador"]
     irt = calcular_esquema_irt(neto_target, minimo_profesional, clase_riesgo,
                                 comision_pct, num_empleados, prima_riesgo=prima_riesgo)
 

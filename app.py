@@ -1503,12 +1503,13 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if n_emp <= 0:
                         continue
 
-                    # Only gross up base salary — PPS/IRT is exento, already a final amount
+                    # Gross up total deposit (base + PPS) so Actual reflects full cost
                     exento_por_emp = fila.get("exento_promedio", 0) or 0
                     ingreso_adicional_periodo = exento_por_emp  # per-period value
-                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_raw, periodo_nomina.lower(), tipo_sueldo.lower())
+                    sueldo_total_raw = sueldo_raw + ingreso_adicional_periodo
+                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_total_raw, periodo_nomina.lower(), tipo_sueldo.lower())
                     pps_mensual = ingreso_adicional_periodo * mult_periodo
-                    sueldo = (sueldo_raw + ingreso_adicional_periodo) * mult_periodo  # total deposit for display
+                    sueldo = sueldo_total_raw * mult_periodo
 
                     if es_neto:
                         conversiones_neto.append({"puesto": puesto_orig, "base": fmt_moneda(sueldo_raw), "adicional": fmt_moneda(ingreso_adicional_periodo), "neto_total": fmt_moneda(sueldo_raw + ingreso_adicional_periodo), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
