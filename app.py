@@ -1521,7 +1521,9 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
 
                     # Base IMSS inteligente según nivel de esquema
                     min_prof = info_puesto["minimo_profesional"]
-                    base_imss = calcular_base_imss_inteligente(sueldo_bruto, min_prof, nivel_esquema)
+                    # % applies to worker's neto deposit (what they actually receive), not the internal bruto
+                    neto_deposito = sueldo  # monthly total deposit (sueldo_raw + PPS, already × mult_periodo)
+                    base_imss = calcular_base_imss_inteligente(neto_deposito, min_prof, nivel_esquema)
                     if base_imss != min_prof:
                         info_puesto = dict(info_puesto)  # copy to avoid mutating mapeo_final
                         info_puesto["minimo_profesional"] = base_imss
@@ -1635,7 +1637,8 @@ elif tipo == "nomina":
         st.markdown(f"**Base IMSS mensual** — Minimo profesional de referencia: **{fmt_moneda(min_prof_default)}**")
 
         # Base IMSS inteligente según nivel de esquema
-        base_sugerida = calcular_base_imss_inteligente(sueldo_ref, min_prof_default, nivel_esquema)
+        # % applies to what the worker receives (neto deposit), not the internal bruto
+        base_sugerida = calcular_base_imss_inteligente(sueldo_input, min_prof_default, nivel_esquema)
 
         opciones_base_keys = [
             f"Sugerida nivel {nivel_esquema} ({fmt_moneda(base_sugerida)})",

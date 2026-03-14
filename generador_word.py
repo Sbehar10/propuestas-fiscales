@@ -276,7 +276,7 @@ def _generar_portada(doc, datos_cliente, tipo_servicio):
     p_brand = cell.add_paragraph()
     p_brand.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_brand.paragraph_format.space_before = Pt(10)
-    run = p_brand.add_run("BEHAR FISCAL")
+    run = p_brand.add_run("")
     run.font.name = 'Cambria'
     run.font.size = Pt(12)
     run.font.color.rgb = GOLD
@@ -352,7 +352,7 @@ def _generar_portada(doc, datos_cliente, tipo_servicio):
     p_tag.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_tag.paragraph_format.space_before = Pt(30)
     p_tag.paragraph_format.space_after = Pt(20)
-    run = p_tag.add_run("BEHAR FISCAL  |  Consultoría Fiscal Estratégica")
+    run = p_tag.add_run("Consultoría Fiscal Estratégica")
     run.font.name = 'Calibri'
     run.font.size = Pt(8)
     run.font.color.rgb = GOLD
@@ -778,7 +778,7 @@ def _agregar_footer(doc, nombre_empresa):
         # Confidential text
         p = footer.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(f"Confidencial — Behar Fiscal 2026  |  Propuesta para {nombre_empresa}")
+        run = p.add_run(f"Confidencial — Propuesta Fiscal 2026  |  Propuesta para {nombre_empresa}")
         run.font.size = Pt(7)
         run.font.color.rgb = SECONDARY
         run.font.name = 'Calibri'
