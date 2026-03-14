@@ -427,6 +427,16 @@ def generar_excel_resultados(resultados_grupos, nombre_empresa, estado_nombre, t
 
         detail_items = [
             ("Sueldo bruto", r["sueldo_bruto"]),
+            ("Neto trabajador (Actual)", r["actual"]["neto_trabajador"]),
+            ("Neto trabajador (IRT)", r["irt"]["neto_trabajador"]),
+            ("--- Esquema Actual ---", ""),
+            ("ISR", r["actual"]["isr"]["isr_neto"]),
+            ("IMSS patronal", r["actual"]["imss_patronal"]["total"]),
+            ("IMSS obrero", r["actual"]["imss_obrero"]["total"]),
+            ("Infonavit", r["actual"]["infonavit"]),
+            ("ISN", r["actual"]["isn"]),
+            ("Costo actual (por empleado)", r["actual"]["costo_por_empleado"]),
+            ("--- Esquema IRT ---", ""),
             ("Base nomina IRT", r["irt"]["base_nomina"]),
             ("Excedente IRT", r["irt"]["excedente_irt"]),
             ("IMSS patronal", r["irt"]["imss_patronal"]["total"]),
@@ -441,7 +451,8 @@ def generar_excel_resultados(resultados_grupos, nombre_empresa, estado_nombre, t
         ]
         for label, val in detail_items:
             ws2.cell(row=detail_row, column=1, value=label)
-            ws2.cell(row=detail_row, column=2, value=round(val, 2)).number_format = '$#,##0.00'
+            if val != "":
+                ws2.cell(row=detail_row, column=2, value=round(val, 2)).number_format = '$#,##0.00'
             detail_row += 1
         detail_row += 1
 
@@ -1492,18 +1503,15 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if n_emp <= 0:
                         continue
 
-                    # Add additional income (PPS/IRT/exento) to neto BEFORE bruto conversion
-                    # so the total deposit is what gets grossed up
+                    # Only gross up base salary — PPS/IRT is exento, already a final amount
                     exento_por_emp = fila.get("exento_promedio", 0) or 0
                     ingreso_adicional_periodo = exento_por_emp  # per-period value
-                    sueldo_total_raw = sueldo_raw + ingreso_adicional_periodo
-
-                    # Convert to monthly bruto using auto-detected period and salary type
-                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_total_raw, periodo_nomina.lower(), tipo_sueldo.lower())
-                    sueldo = sueldo_total_raw * mult_periodo  # Keep for display (total neto monthly)
+                    sueldo_bruto = convertir_a_bruto_mensual(sueldo_raw, periodo_nomina.lower(), tipo_sueldo.lower())
+                    pps_mensual = ingreso_adicional_periodo * mult_periodo
+                    sueldo = (sueldo_raw + ingreso_adicional_periodo) * mult_periodo  # total deposit for display
 
                     if es_neto:
-                        conversiones_neto.append({"puesto": puesto_orig, "base": fmt_moneda(sueldo_raw), "adicional": fmt_moneda(ingreso_adicional_periodo), "neto_total": fmt_moneda(sueldo_total_raw), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
+                        conversiones_neto.append({"puesto": puesto_orig, "base": fmt_moneda(sueldo_raw), "adicional": fmt_moneda(ingreso_adicional_periodo), "neto_total": fmt_moneda(sueldo_raw + ingreso_adicional_periodo), "mensual": fmt_moneda(sueldo), "bruto": fmt_moneda(sueldo_bruto), "emp": n_emp})
 
                     info_puesto = mapeo_final.get(puesto_orig, {
                         "puesto_catalogo": "Otro (personalizado)",
@@ -1531,14 +1539,15 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                         minimo_profesional=info_puesto["minimo_profesional"],
                         comision_pct=comision_pct,
                         prima_riesgo=prima_riesgo_global,
+                        ingreso_exento=pps_mensual,
                     )
                     # Store neto original when applicable
                     if es_neto:
                         r["sueldo_neto_original"] = sueldo
 
                     # Track additional income for display
-                    if ingreso_adicional_periodo > 0:
-                        r["ingreso_exento_adicional"] = ingreso_adicional_periodo * mult_periodo
+                    if pps_mensual > 0:
+                        r["ingreso_exento_adicional"] = pps_mensual
 
                     resultados_grupos.append(r)
 
@@ -1567,6 +1576,13 @@ Sugerencia: Selecciona otra hoja o verifica que el archivo tenga una columna con
                     if _grupos_sm:
                         _n_sm = sum(g["num_empleados"] for g in _grupos_sm)
                         st.warning(f"{_n_sm} empleado(s) con sueldo <= salario minimo (${_sm:,.2f}) quedan 100% IMSS — no hay margen para IRT.")
+
+                    # Warn about employees where IRT doesn't generate savings
+                    _grupos_sin_ahorro = [g for g in resultados_grupos if g["ahorro_mensual"] <= 0 and g["sueldo_bruto"] > _sm]
+                    if _grupos_sin_ahorro:
+                        _puestos_sa = ", ".join(g["puesto"] for g in _grupos_sin_ahorro)
+                        _n_sa = sum(g["num_empleados"] for g in _grupos_sin_ahorro)
+                        st.warning(f"{_n_sa} empleado(s) ({_puestos_sa}) no generan ahorro con IRT — su bruto es muy cercano al salario minimo. Se recomienda mantenerlos 100% IMSS.")
 
                     mostrar_resultados_nomina(resultados_grupos, comision_pct, nombre_empresa, contacto, es_neto=es_neto)
                 else:

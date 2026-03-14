@@ -515,17 +515,15 @@ def _piramidar_sc(neto_deseado, pct_anticipo, comision_pct):
 # CÁLCULO RESUMEN POR GRUPO DE EMPLEADOS
 # ============================================================
 def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
-                           minimo_profesional, comision_pct, prima_riesgo=None):
+                           minimo_profesional, comision_pct, prima_riesgo=None, ingreso_exento=0):
     """Calcula el resumen completo para un grupo: Actual vs IRT"""
     actual = calcular_esquema_actual(sueldo_bruto, clase_riesgo, num_empleados, prima_riesgo)
 
-    # IRT receives the worker's NETO as deposit target (not the bruto)
-    # This ensures the worker always receives the same neto in both schemes
-    neto_target = actual["neto_trabajador"]
+    # IRT targets: worker's actual neto + any exento income (PPS/IRT)
+    neto_target = actual["neto_trabajador"] + ingreso_exento
     irt = calcular_esquema_irt(neto_target, minimo_profesional, clase_riesgo,
                                 comision_pct, num_empleados, prima_riesgo=prima_riesgo)
 
-    # Ahorro: costo interno actual vs subtotal factura IRT (pre-IVA, el IVA es acreditable)
     ahorro = actual["costo_total"] - (irt["subtotal_factura"] * num_empleados)
 
     return {
@@ -538,4 +536,5 @@ def calcular_grupo_nomina(puesto, num_empleados, sueldo_bruto, clase_riesgo,
         "irt": irt,
         "ahorro_mensual": ahorro,
         "ahorro_anual": ahorro * 12,
+        "ingreso_exento": ingreso_exento,
     }
